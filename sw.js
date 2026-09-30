@@ -1,10 +1,10 @@
 // Capifit: guarda la app en el celular para que abra aunque no haya señal.
 // Los datos se sincronizan solos (Firebase guarda los cambios y los sube cuando vuelve la conexión).
-const CACHE = 'capifit-v4';
+const CACHE = 'capifit-v5';
 const CDN = ['www.gstatic.com', 'cdnjs.cloudflare.com', 'unpkg.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html', './config.js', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'])).catch(() => { }));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html', './config.js', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png', './capi-deco.jpg', './capi-corre.jpg'])).catch(() => { }));
   self.skipWaiting();
 });
 self.addEventListener('activate', e => {
@@ -14,6 +14,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // Los videos van directo (el iPhone los pide por partes y no se pueden guardar así)
+  if (url.pathname.endsWith('.mp4')) return;
   // La app: primero internet (para tener siempre la última versión), si no hay, la guardada
   if (req.mode === 'navigate' || (url.origin === location.origin && url.pathname.endsWith('.html'))) {
     e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(k => k.put('./index.html', c)); return r; })
