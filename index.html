@@ -183,6 +183,7 @@ html.touring,html.touring body{overflow:hidden;overscroll-behavior:none}
 .cb{background:var(--card);padding:10px 12px;border-radius:16px 16px 16px 4px;max-width:82%;box-shadow:var(--shadow);font-size:.95rem;line-height:1.42;overflow-wrap:anywhere}
 .cmsg.me .cb{background:var(--brand);color:var(--brand-ink);border-radius:16px 16px 4px 16px}
 .cb.err{background:var(--bad-soft);color:var(--bad)}
+.cdet{margin-top:8px;font-size:.72rem;opacity:.75;word-break:break-all;font-family:ui-monospace,Menlo,monospace}
 .coach-in{position:sticky;bottom:calc(-20px - var(--safe-b));background:var(--bg);display:flex;gap:8px;align-items:flex-end;padding:10px 0 calc(12px + var(--safe-b))}
 .coach-in textarea{resize:none;min-height:46px;max-height:120px;line-height:1.35}
 .coach-in .btn{min-width:52px;font-size:1.1rem}
@@ -1462,7 +1463,7 @@ const AI_SDK = '12.19.0';
 // Modelos a probar en orden (si uno no existe en tu proyecto, se usa el siguiente). Se puede cambiar en config.js.
 function coachModels() {
   const saved = (() => { try { return localStorage.getItem('capifit_ai_model'); } catch (e) { return null; } })();
-  const list = window.CAPIFIT_AI_MODELS || ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+  const list = window.CAPIFIT_AI_MODELS || ['gemini-3.8-flash', 'gemini-3.8-flash-lite', 'gemini-3.6-flash', 'gemini-3.6-flash-lite', 'gemini-3-flash', 'gemini-3-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
   return saved ? [saved, ...list.filter(m => m !== saved)] : list;
 }
 const COACH_LIMIT = 60; // mensajes por persona por día (cuida el cupo gratis)
@@ -1558,7 +1559,7 @@ function renderCoach() {
   }
   const msgs = c.msgs.map((m, i) => m.r === 'user'
     ? `<div class="cmsg me"><div class="cb">${esc(m.t)}</div></div>`
-    : `<div class="cmsg"><div class="cav">${capiSVG(capiFat(), 'happy')}</div><div class="cb ${m.err ? 'err' : ''}" ${i === c.msgs.length - 1 && c.busy ? 'id="coach-live"' : ''}>${m.t ? coachMd(m.t) : '<span class="typing"><i></i><i></i><i></i></span>'}</div></div>`).join('');
+    : `<div class="cmsg"><div class="cav">${capiSVG(capiFat(), 'happy')}</div><div class="cb ${m.err ? 'err' : ''}" ${i === c.msgs.length - 1 && c.busy ? 'id="coach-live"' : ''}>${m.t ? coachMd(m.t) : '<span class="typing"><i></i><i></i><i></i></span>'}${m.detail ? `<div class="cdet">Detalle: ${esc(m.detail)}</div>` : ''}</div></div>`).join('');
   const left = COACH_LIMIT - coachCount();
   el.innerHTML = `<div class="grab"></div><div class="sheet-h"><h2>💬 Preguntale al Capi</h2><div class="row">${c.msgs.length ? '<button class="btn sm" onclick="coachReset()">Nueva charla</button>' : ''}<button class="x" onclick="closeSheet()">✕</button></div></div>
   <div id="coach-msgs">${msgs || `<div class="cmsg"><div class="cav">${capiSVG(capiFat(), 'happy')}</div><div class="cb">¡Hola ${esc(S.profile.name.split(' ')[0])}! Soy tu capi coach 🦫 Preguntame lo que quieras: qué comer con lo que te queda, cómo venís, ejercicios, tus objetivos…</div></div>`}</div>
@@ -1570,12 +1571,20 @@ function renderCoach() {
 }
 async function coachConsent() { S.profile.aiConsent = Date.now(); renderCoach(); await Store.saveProfile({ aiConsent: S.profile.aiConsent }); }
 function coachReset() { if (S.coach.busy) return; S.coach.msgs = []; coachSave(); renderCoach(); }
+// Código HTTP y texto del error que devuelve Firebase AI (sin confundirse con la URL, que contiene "generateContent")
+function coachErrInfo(e) {
+  const status = e?.customErrorData?.status || (String(e?.message || '').match(/\[(\d{3})\b/) || [])[1];
+  const code = String(e?.code || '');
+  const msg = String(e?.message || e || '').replace(/Error fetching from \S+:\s*/, '').replace(/^AI:\s*/, '');
+  return { status: status ? +status : null, code, msg };
+}
 function coachErr(e) {
-  const m = String((e && (e.message || e.code)) || e);
-  if (/quota|429|RESOURCE_EXHAUSTED|rate/i.test(m)) return 'Uf, el capi se cansó de tanto hablar: llegamos al límite gratis de la IA por ahora. Probá de nuevo en un rato 😴';
-  if (/api-not-enabled|not been used|has not been enabled|SERVICE_DISABLED|disabled|firebasevertexai|firebaseml|API key/i.test(m)) return 'Falta activar la IA en Firebase: en la consola, AI Logic → Comenzar → Gemini Developer API. Después volvé a preguntar.';
-  if (/network|Failed to fetch|fetch|offline|Load failed|import/i.test(m) || !navigator.onLine) return 'No tengo conexión para pensar 📡 Probá cuando tengas señal.';
-  if (/safety|blocked|SAFETY/i.test(m)) return 'Esa no te la puedo contestar. Probá preguntarlo de otra forma.';
+  const { status, code, msg } = coachErrInfo(e);
+  if (code.includes('api-not-enabled') || /SERVICE_DISABLED|has not been used|is disabled|not been enabled/i.test(msg)) return 'Falta activar la IA en Firebase: en la consola, AI Logic → Comenzar → Gemini Developer API. Después volvé a preguntar.';
+  if (status === 429 || /RESOURCE_EXHAUSTED|quota/i.test(msg)) return 'Uf, el capi se cansó de tanto hablar: llegamos al límite gratis de la IA por ahora. Probá de nuevo en un rato 😴';
+  if (!status && (/Failed to fetch|NetworkError|Load failed|network|importing a module|dynamically imported/i.test(msg) || !navigator.onLine)) return 'No tengo conexión para pensar 📡 Probá cuando tengas señal.';
+  if (/SAFETY|blocked/i.test(msg) && !status) return 'Esa no te la puedo contestar. Probá preguntarlo de otra forma.';
+  if (status === 403) return 'Firebase no dejó usar la IA (permiso denegado). Revisá que AI Logic esté activado con Gemini Developer API.';
   return 'Algo falló al responder. Probá de nuevo en un ratito.';
 }
 async function coachSend(q) {
@@ -1586,6 +1595,7 @@ async function coachSend(q) {
   while (history.length && history[0].r !== 'user') history.shift();
   c.msgs.push({ r: 'user', t: text }); c.msgs.push({ r: 'model', t: '' }); c.busy = true; renderCoach(); coachCount(true);
   const live = c.msgs[c.msgs.length - 1]; const system = coachSystem(); let lastErr = null;
+  const tried = [];
   for (const model of coachModels()) {
     try {
       const chat = (await coachModel(system, model)).startChat({ history: history.map(m => ({ role: m.r, parts: [{ text: m.t }] })) });
@@ -1595,14 +1605,19 @@ async function coachSend(q) {
         live.t += part; const b = $('#coach-live'); if (b) { b.innerHTML = coachMd(live.t); const box = $('.sheet'); if (box) box.scrollTop = box.scrollHeight; }
       }
       if (!live.t.trim()) { try { live.t = (await res.response).text(); } catch (e) { } }
-      if (!live.t.trim()) throw new Error('empty');
+      if (!live.t.trim()) throw new Error('Respuesta vacía');
       try { localStorage.setItem('capifit_ai_model', model); } catch (e) { }
       lastErr = null; break;
     } catch (e) {
       console.warn('coach', model, e); lastErr = e; live.t = '';
-      if (!/not found|404|not supported|unsupported|does not exist|is not available|invalid model/i.test(String(e && e.message || e))) break;
+      const { status, code, msg } = coachErrInfo(e); tried.push(`${model}: ${status || code || ''} ${msg}`.slice(0, 160));
+      // Sin conexión o IA sin activar: no tiene sentido probar otro modelo
+      if (code.includes('api-not-enabled') || /SERVICE_DISABLED|has not been used/i.test(msg)) break;
+      if (!status && /Failed to fetch|NetworkError|Load failed|importing a module|dynamically imported/i.test(msg)) break;
+      try { if (localStorage.getItem('capifit_ai_model') === model) localStorage.removeItem('capifit_ai_model'); } catch (x) { }
     }
   }
+  if (lastErr) live.detail = tried.slice(-3).join(' · ');
   if (lastErr) { live.t = coachErr(lastErr); live.err = true; }
   c.busy = false; coachSave(); if ($('#coach-msgs')) renderCoach();
 }
