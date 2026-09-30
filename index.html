@@ -1484,7 +1484,7 @@ async function coachModel(system, model) {
     const app = initializeApp(S._coachTestCfg || FIREBASE_CONFIG, 'capifit-ai');
     S._ai = { ai: getAI(app, { backend: new GoogleAIBackend() }), getGenerativeModel };
   }
-  return S._ai.getGenerativeModel(S._ai.ai, { model, systemInstruction: system, generationConfig: { temperature: 0.6, maxOutputTokens: 1000 } });
+  return S._ai.getGenerativeModel(S._ai.ai, { model, systemInstruction: system, generationConfig: { temperature: 0.7, maxOutputTokens: 8192 } });
 }
 
 // ---------- Lo que el capi sabe de vos (se arma de nuevo en cada pregunta) ----------
@@ -1513,8 +1513,13 @@ function coachSystem() {
   return `Sos "Capi", el coach de Capifit: un carpincho simpático que acompaña a ${S.profile.name} con su alimentación, calorías, ejercicio y progreso. Hablás en español rioplatense (de "vos"), cálido, directo y con un poco de humor. Máximo 1 o 2 emojis por respuesta.
 
 CÓMO RESPONDER
-- Corto: de 2 a 6 oraciones o una lista breve, salvo que te pidan más detalle.
-- Usá los datos de abajo cuando sirvan (kcal que le quedan, peso, tendencia, objetivos) y citá los números. No inventes datos que no están; si falta algo, decilo y sugerí cargarlo en la app.
+- Andá DIRECTO a lo que pregunta desde la primera línea. No arranques saludando ni repitiéndole sus propios datos: usalos para decidir qué recomendar, y mencioná solo el número que importa (ej. "con las 1.019 kcal que te quedan…"). Saludá solo si te saluda.
+- Sé concreto y útil, como un nutricionista y entrenador que lo conoce: nada de consejos genéricos tipo "comé sano" o "tomá agua".
+- Si pide ideas u opciones (comidas, meriendas, cenas): dale 3 a 5 opciones concretas, cada una con cantidad casera, kcal y proteína aproximadas, que entren en lo que le queda del día y ayuden con lo que le falta (por ejemplo proteína).
+- Si pide una rutina: ejercicios con series, repeticiones o minutos, adaptados a su peso y nivel.
+- Si pregunta por su progreso: interpretá la tendencia con sus números (promedios, qué días se pasó, qué está funcionando) y cerrá con 1 o 2 acciones concretas.
+- Largo: lo justo para que sirva, sin relleno (en general entre 60 y 200 palabras). Usá listas con "-" y **negrita** para lo importante.
+- No inventes datos que no están; si falta algo, decilo y sugerí cargarlo en la app.
 - Las calorías de las comidas son estimaciones: si das números, decí que son aproximados.
 - Para ideas de comidas, preferí platos argentinos comunes y porciones caseras.
 - Si preguntan cómo usar la app: Capifit tiene las secciones Hoy (anillo de calorías, comidas, agua, copiar el día anterior), Actividad (cargar deportes y minutos, pasos, sueño), Progreso (mediciones con balanza y cinta, gráfico, fotos privadas, objetivos por semana/mes/trimestre/año, transformación del capi), Pareja (código para vincularse, desafío semanal, aplausos, privacidad) y Perfil (meta, datos, Excel). Para cargar comida: "+ Agregar" en cada comida; hay buscador, escáner de código de barras, carga rápida, crear alimento y crear receta.
@@ -1528,13 +1533,21 @@ SEGURIDAD (obligatorio)
 - Si aparecen señales de una relación difícil con la comida (culpa fuerte, compensar comiendo nada o vomitando, miedo a comer, atracones con angustia), respondé con cuidado, sin números de calorías, y sugerí hablar con un profesional de salud.
 - Nunca retes ni avergüences: un mal día es un mal día; proponé el próximo paso.
 
+EJEMPLO DE BUENA RESPUESTA (a "ideas de merienda con proteína", con 1.019 kcal y 78 g de proteína por cubrir):
+Con lo que te queda tenés margen de sobra, así que apuntemos a la proteína 💪
+- **Yogur griego (160 g) + 1 cucharada de granola**: ~210 kcal, 17 g de proteína
+- **Tostado de pan integral con jamón y queso**: ~300 kcal, 20 g
+- **2 huevos revueltos + 1 tostada**: ~250 kcal, 15 g
+- **Licuado de leche descremada, banana y 1 scoop de whey**: ~300 kcal, 30 g
+Con el licuado o el griego llegás a la cena habiendo cubierto casi la mitad de lo que te falta.
+
 DATOS DE ${S.profile.name.toUpperCase()} (actualizados ahora):
 ${coachContext()}`;
 }
 
 // ---------- Pantalla del chat ----------
 function coachMd(t) {
-  let h = esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|\n)\s*[-•*]\s+/g, '$1• ');
+  let h = esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|\s)_(\(.+?\))_/g, '$1<i>$2</i>').replace(/(^|\n)\s*[-•*]\s+/g, '$1• ');
   return h.replace(/\n/g, '<br>');
 }
 function openCoach() {
@@ -1591,12 +1604,15 @@ async function coachSend(q) {
   const c = S.coach; if (c.busy) return;
   const input = $('#coach-q'); const text = (q || input?.value || '').trim(); if (!text) return;
   if (coachCount() >= COACH_LIMIT) return toast('Llegaste al máximo de preguntas por hoy. Mañana seguimos 🦫', 3500);
-  const history = c.msgs.filter(m => !m.err && m.t).slice(-16);
-  while (history.length && history[0].r !== 'user') history.shift();
+  // Solo pares pregunta → respuesta que salieron bien (Gemini exige que se alternen)
+  const pairs = [];
+  for (let i = 0; i < c.msgs.length - 1; i++) { const u = c.msgs[i], m = c.msgs[i + 1]; if (u.r === 'user' && m.r === 'model' && !m.err && m.t) { pairs.push(u, m); i++; } }
+  const history = pairs.slice(-16);
   c.msgs.push({ r: 'user', t: text }); c.msgs.push({ r: 'model', t: '' }); c.busy = true; renderCoach(); coachCount(true);
   const live = c.msgs[c.msgs.length - 1]; const system = coachSystem(); let lastErr = null;
-  const tried = [];
-  for (const model of coachModels()) {
+  const tried = []; const models = coachModels(); let retried = false;
+  for (let mi = 0; mi < models.length; mi++) {
+    const model = models[mi];
     try {
       const chat = (await coachModel(system, model)).startChat({ history: history.map(m => ({ role: m.r, parts: [{ text: m.t }] })) });
       const res = await chat.sendMessageStream(text);
@@ -1604,7 +1620,8 @@ async function coachSend(q) {
         let part = ''; try { part = ch.text(); } catch (e) { }
         live.t += part; const b = $('#coach-live'); if (b) { b.innerHTML = coachMd(live.t); const box = $('.sheet'); if (box) box.scrollTop = box.scrollHeight; }
       }
-      if (!live.t.trim()) { try { live.t = (await res.response).text(); } catch (e) { } }
+      let fin = null; try { const full = await res.response; fin = full?.candidates?.[0]?.finishReason; if (!live.t.trim()) live.t = full.text(); } catch (e) { }
+      if (fin === 'MAX_TOKENS' && live.t.trim()) live.t += '\n\n_(Se me cortó: decime "seguí" y termino.)_';
       if (!live.t.trim()) throw new Error('Respuesta vacía');
       try { localStorage.setItem('capifit_ai_model', model); } catch (e) { }
       lastErr = null; break;
@@ -1613,7 +1630,11 @@ async function coachSend(q) {
       const { status, code, msg } = coachErrInfo(e); tried.push(`${model}: ${status || code || ''} ${msg}`.slice(0, 160));
       // Sin conexión o IA sin activar: no tiene sentido probar otro modelo
       if (code.includes('api-not-enabled') || /SERVICE_DISABLED|has not been used/i.test(msg)) break;
-      if (!status && /Failed to fetch|NetworkError|Load failed|importing a module|dynamically imported/i.test(msg)) break;
+      // Corte de conexión (Safari: "Load failed"): reintenta una vez el mismo modelo antes de rendirse
+      if (!status && /Failed to fetch|NetworkError|Load failed|network connection was lost|importing a module|dynamically imported/i.test(msg)) {
+        if (!retried && navigator.onLine) { retried = true; mi--; const b = $('#coach-live'); if (b) b.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; await new Promise(r => setTimeout(r, 1200)); continue; }
+        break;
+      }
       try { if (localStorage.getItem('capifit_ai_model') === model) localStorage.removeItem('capifit_ai_model'); } catch (x) { }
     }
   }
