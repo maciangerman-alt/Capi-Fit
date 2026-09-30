@@ -114,6 +114,20 @@ nav#tabs button.on .ic{filter:none;opacity:1}
 .src td{padding:3px 0;border-top:1px dashed var(--line)}
 .src td:last-child{text-align:right;font-weight:800;color:var(--ink)}
 .src td[colspan]{text-align:left}
+.bal{margin-top:14px;background:var(--card2);border-radius:14px;padding:10px 12px;font-size:.85rem;cursor:pointer}
+.bal-row{display:flex;justify-content:space-between;padding:2px 0;color:var(--muted)}
+.bal-row b{color:var(--ink)}
+.bal-row.tot{border-top:1px solid var(--line);margin-top:3px;padding-top:5px;color:var(--ink);font-weight:700}
+.bal-l{color:var(--muted)} .bal-l b{color:var(--ink)}
+.bal-more{margin-top:6px;color:var(--brand-2);font-weight:800;font-size:.8rem}
+.plan-bars{background:var(--card2);border-radius:14px;padding:12px}
+.plan-bars .pb{margin-bottom:8px} .plan-bars small{color:var(--muted);font-weight:700}
+.pbar{position:relative;height:26px;background:var(--track);border-radius:9px;margin-top:3px;overflow:hidden}
+.pbar i{position:absolute;left:0;top:0;bottom:0;border-radius:9px}
+.pbar b{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:.85rem}
+.pstep{display:flex;gap:10px;padding:10px 0;border-top:1px dashed var(--line);font-size:.9rem}
+.pstep .muted{font-size:.85rem;margin-top:2px;line-height:1.35}
+.pn{flex:none;width:24px;height:24px;border-radius:50%;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center;font-weight:900;font-size:.8rem}
 .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .acts .tile.on{outline:2.5px solid var(--brand)}
 .stat{background:var(--card2);border-radius:14px;padding:10px 12px}
@@ -233,7 +247,14 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const r0 = n => Math.round(+n || 0);
 const r1 = n => Math.round((+n || 0) * 10) / 10;
-const num = v => { if (v === '' || v == null) return null; const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
+// Lee números como los escribimos acá: "1.500" = mil quinientos, "72,5" = setenta y dos y medio.
+const num = v => {
+  if (v === '' || v == null) return null; let s = String(v).trim().replace(/\s/g, '');
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');   // 1.500 · 10.000 · 1.234,5
+  else if (/^-?\d{1,3}(,\d{3})+\.\d+$/.test(s)) s = s.replace(/,/g, '');                       // 1,234.5
+  else s = s.replace(',', '.');
+  const n = parseFloat(s); return isFinite(n) ? n : null;
+};
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const clean = o => JSON.parse(JSON.stringify(o));
@@ -309,6 +330,8 @@ const BM = [
   { k: 'neck', t: 'Cuello', u: 'cm', lowGood: null }
 ];
 const BM_BY = Object.fromEntries(BM.map(m => [m.k, m]));
+// Rangos razonables: si algo cae afuera, seguro es un error de tipeo (ej: "72.500" en vez de "72,5")
+const BM_RANGE = { w: [25, 350], fat: [2, 75], mus: [10, 150], wat: [20, 80], vis: [1, 60], bone: [0.5, 10], age: [10, 110], waist: [40, 250], hip: [50, 250], chest: [50, 250], arm: [10, 80], thigh: [20, 120], neck: [20, 70] };
 
 // =====================================================================
 //  ALMACENAMIENTO: Firebase (real) o localStorage (demo)
@@ -482,15 +505,52 @@ const KCAL_KG = 7700;      // ~7.700 kcal por kilo de grasa
 const MAX_DEFICIT = 1000;  // déficit máximo por día sin supervisión médica
 const PACES_BAJAR = [[0.5, 'Tranquilo'], [0.75, 'Normal'], [1, 'Firme']];
 function pacePct(p) { return p.pacePct || ({ 0.25: 0.5, 0.5: 0.75, 0.75: 1 })[p.pace] || 0.75; }
+function sexFloorOf(p) { return p.sex === 'M' ? 1500 : 1200; }
+// Masa magra (para Katch-McArdle): usa el peso del MISMO día en que se midió la grasa
+function leanKg() { const lf = lastBody('fat'); if (!lf) return null; const wAt = lf.w ?? weightAt(lf.date, false)?.w ?? curWeight(); return wAt * (1 - lf.fat / 100); }
+// El cálculo de energía, en un solo lugar (lo usan la meta, la proyección, los ritmos y los objetivos).
+// reason: 'ok' | 'capped' (el ritmo pedía más de 1.000 kcal de déficit) | 'floored' (la meta tocó el mínimo seguro)
+//         | 'lowtdee' (tu gasto es menor que el mínimo seguro: con la comida sola no se baja) | 'manual'
+function energyFor(p, w, opt = {}) {
+  const h = p.height || 170, a = ageFrom(p.birth), act = p.act || 1.2;
+  const lean = opt.lean !== undefined ? opt.lean : (p.formula === 'katch' ? leanKg() : null);
+  const bmr = lean ? 370 + 21.6 * lean : 10 * w + 6.25 * h - 5 * a + (p.sex === 'M' ? 5 : -161);
+  const formula = lean ? 'Katch-McArdle' : 'Mifflin-St Jeor';
+  const tdee = bmr * act, sexFloor = sexFloorOf(p);
+  let want = 0, kcal = tdee, reason = 'ok', gap = 0;
+  if (p.goal === 'bajar') {
+    want = w * (opt.pct ?? pacePct(p)) / 100 * KCAL_KG / 7;             // déficit que pide tu ritmo
+    if (want > MAX_DEFICIT) reason = 'capped';
+    const planned = tdee - Math.min(want, MAX_DEFICIT); kcal = planned;
+    if (kcal < sexFloor) { kcal = sexFloor; reason = sexFloor >= tdee - 50 ? 'lowtdee' : 'floored'; gap = kcal - planned; }
+  } else if (p.goal === 'subir') { want = -(opt.pace ?? (p.pace === 0.5 ? 0.5 : 0.25)) * KCAL_KG / 7; kcal = tdee - want; }
+  if (p.manualKcal && !opt.noManual) { kcal = p.manualKcal; reason = 'manual'; gap = 0; }
+  kcal = Math.round(kcal / 10) * 10;
+  const adj = kcal - tdee;                 // lo que de verdad se aplica (negativo = déficit)
+  return { bmr, tdee, kcal, adj, want, gap, reason, sexFloor, weekly: adj * 7 / KCAL_KG, formula, act };
+}
+// Las primeras 2 semanas de déficit la balanza baja mucho más: se va el agua que acompaña a las reservas
+// de hidratos (glucógeno) y la comida en tránsito. Es real en la balanza (1-4 kg según el tamaño) y conviene
+// mostrarlo, pero no es grasa: después el ritmo se estabiliza en el de la grasa.
+function waterKg(w) { return Math.max(1, Math.min(4, w * 0.025)); }
+function planWeeksIn() { const p = S.profile || {}; const st = p.planStart || (S.body.find(b => b.w != null) || {}).date || today(); return Math.max(0, (parseYmd(today()) - parseYmd(st)) / (7 * 864e5)); }
+// Agua que todavía falta perder en la semana i (1 = la que viene), según cuánto hace que arrancaste
+function waterWeek(w, i, since = planWeeksIn()) { const tot = waterKg(w); const at = t => tot * (t <= 0 ? 0 : t >= 2 ? 1 : t <= 1 ? 0.6 * t : 0.6 + 0.4 * (t - 1)); return Math.max(0, at(since + i) - at(since + i - 1)); }
+// Lo que vas a ver en la balanza: primeras semanas (grasa + agua) y después (grasa)
+function scaleWeeks(e, w) { const fat = Math.max(0, -e.weekly); const since = planWeeksIn(); const early = since < 2 ? fat + waterWeek(w, 1, since) : null; return { fat, early }; }
+function scaleTxt(e, w) {
+  const { fat, early } = scaleWeeks(e, w); if (fat < 0.05) return '';
+  return early != null && early > fat + 0.2 ? `Las primeras semanas vas a ver ≈ −${fmt1(early)} kg por semana en la balanza (buena parte es agua); después, ≈ −${fmt1(fat)} kg por semana de grasa.` : `≈ −${fmt1(fat)} kg por semana de grasa.`;
+}
 // Proyección semana a semana: a medida que bajás, el gasto baja y el ritmo se acomoda solo.
 function projection(goalW) {
   const p = S.profile || {}; let w = curWeight(); if (!goalW || p.goal !== 'bajar' || goalW >= w) return null;
-  const h = p.height || 170, a = ageFrom(p.birth), act = p.act || 1.2, sexFloor = p.sex === 'M' ? 1500 : 1200;
-  const exc = S.profile.manualKcal; const pts = [{ wk: 0, w }]; let wk = 0;
+  const lean = p.formula === 'katch' ? leanKg() : null;   // con Katch, la masa magra se mantiene
+  const pts = [{ wk: 0, w }]; let wk = 0;
   while (w > goalW && wk < 260) {
-    const bmr = 10 * w + 6.25 * h - 5 * a + (p.sex === 'M' ? 5 : -161), tdee = bmr * act;
-    let kcal = exc || Math.max(tdee - Math.min(w * pacePct(p) / 100 * KCAL_KG / 7, MAX_DEFICIT), sexFloor, tdee - MAX_DEFICIT);
-    const loss = Math.max(0, (tdee - kcal) * 7 / KCAL_KG); if (loss < 0.05) return { stuck: true };
+    const e = energyFor(p, w, { lean }); const fat = Math.max(0, -e.weekly);
+    if (fat < 0.05) return { stuck: true, reason: e.reason };
+    const loss = fat + waterWeek(curWeight(), wk + 1);
     w -= loss; wk++; pts.push({ wk, w });
   }
   const d = new Date(); d.setDate(d.getDate() + wk * 7);
@@ -499,52 +559,111 @@ function projection(goalW) {
 function ageFrom(b) { if (!b) return 30; const d = parseYmd(b), n = new Date(); let a = n.getFullYear() - d.getFullYear(); if (n.getMonth() < d.getMonth() || (n.getMonth() === d.getMonth() && n.getDate() < d.getDate())) a--; return a; }
 function lastBody(key) { for (let i = S.body.length - 1; i >= 0; i--) if (S.body[i][key] != null) return S.body[i]; return null; }
 function curWeight() { const b = lastBody('w'); return b ? b.w : (S.profile?.weight || 70); }
+// Peso de partida del camino a la meta: el que tenías cuando la pusiste (o tu primera pesada)
+function startWeight() { const p = S.profile || {}; return p.goalStartW || (S.body.find(b => b.w != null) || {}).w || curWeight(); }
+function lostTxt(d) { return d > 0.05 ? `bajaste ${fmt1(d)} kg` : d < -0.05 ? `subiste ${fmt1(-d)} kg` : 'estás igual'; }
 function T() {
-  const p = S.profile || {}; const w = curWeight(); const h = p.height || 170; const a = ageFrom(p.birth);
-  let bmr = 10 * w + 6.25 * h - 5 * a + (p.sex === 'M' ? 5 : -161);
-  let formula = 'Mifflin-St Jeor';
-  const lf = lastBody('fat');
-  if (p.formula === 'katch' && lf) { bmr = 370 + 21.6 * (w * (1 - lf.fat / 100)); formula = 'Katch-McArdle'; }
-  const act = p.act || 1.2; const tdee = bmr * act;
-  // Bajar: el ritmo es un % de tu peso por semana (más kilos = se puede ir más rápido), con un tope
-  // de 1.000 kcal de déficit por día. Nunca por debajo de 1.500 kcal (hombres) / 1.200 (mujeres).
-  const sexFloor = p.sex === 'M' ? 1500 : 1200;
-  const floor = Math.max(sexFloor, Math.round(tdee - MAX_DEFICIT));
-  let adj = 0, capped = false;
-  if (p.goal === 'bajar') { const want = w * pacePct(p) / 100 * KCAL_KG / 7; adj = -Math.min(want, MAX_DEFICIT); capped = want > MAX_DEFICIT; }
-  if (p.goal === 'subir') adj = (p.pace === 0.5 ? 0.5 : 0.25) * KCAL_KG / 7;
-  let kcal = tdee + adj, floored = false;
-  if (kcal < floor) { floored = !capped && kcal < floor - 5; kcal = floor; }
-  let manual = false;
-  if (p.manualKcal) { kcal = p.manualKcal; manual = true; }
-  kcal = Math.round(kcal / 10) * 10;
+  const p = S.profile || {}; const w = curWeight(); const h = p.height || 170;
+  const e = energyFor(p, w); const kcal = e.kcal;
   const bmi = w / Math.pow(h / 100, 2);
   const refW = bmi > 30 ? 27 * Math.pow(h / 100, 2) : w;
-  const pG = Math.round(refW * (p.goal === 'mantener' ? 1.6 : 1.8));
-  const fG = Math.round(Math.max(refW * 0.8, kcal * 0.25 / 9));
+  // Proteína: 1,6–1,8 g por kg (peso de referencia), pero nunca más del 35 % de las calorías.
+  // Grasas: 25 % de las calorías, con un piso de 0,6 g/kg. Carbos: lo que queda.
+  // (Antes proteína y grasas no tenían techo: con metas bajas, tipo 1.200 kcal, se comían todo y los carbos quedaban en ~40 g.)
+  const pG = Math.round(Math.min(refW * (p.goal === 'mantener' ? 1.6 : 1.8), kcal * 0.35 / 4));
+  const fG = Math.round(Math.max(refW * 0.6, kcal * 0.25 / 9));
   const cG = Math.max(0, Math.round((kcal - pG * 4 - fG * 9) / 4));
-  const weekly = (kcal - tdee) * 7 / KCAL_KG; // kg por semana esperados (negativo = bajar)
-  return { bmr, tdee, adj, kcal, floor, floored, manual, capped, weekly, p: pG, f: fG, c: cG, water: Math.round(Math.min(Math.max(w * 35, 1500), 3000) / 250) * 250, w, h, bmi, formula, act };
+  return { ...e, floor: e.sexFloor, floored: e.reason === 'floored' || e.reason === 'lowtdee', capped: e.reason === 'capped', manual: e.reason === 'manual',
+    p: pG, f: fG, c: cG, water: Math.round(Math.min(Math.max(w * 35, 1500), 3000) / 250) * 250, w, h, bmi };
+}
+// ---------- Explicar la meta en criollo ----------
+const GOAL_WORD = { bajar: 'bajar', mantener: 'mantener', subir: 'subir' };
+function kgWeekTxt(kg) { return `${kg > 0 ? '+' : kg < 0 ? '−' : ''}${fmt1(Math.abs(kg))} kg por semana`; }
+// Una línea: cuánto gastás, cuánto comés y qué te deja eso
+function planLine(e, goal) {
+  if (e.reason === 'manual') return `Meta manual: ${fmtK(e.kcal)} kcal · gastás ≈ ${fmtK(e.tdee)} → ${e.adj < 0 ? `déficit de ${fmtK(-e.adj)}` : e.adj > 0 ? `superávit de ${fmtK(e.adj)}` : 'sin déficit'} kcal/día (${kgWeekTxt(e.weekly)})`;
+  if (goal === 'bajar') return `Gastás ≈ ${fmtK(e.tdee)} kcal por día y tu meta es ${fmtK(e.kcal)}: <b>déficit de ${fmtK(Math.max(0, -e.adj))} kcal por día</b> ≈ ${kgWeekTxt(e.weekly)}`;
+  if (goal === 'subir') return `Gastás ≈ ${fmtK(e.tdee)} kcal por día y tu meta es ${fmtK(e.kcal)}: <b>superávit de ${fmtK(e.adj)} kcal por día</b> ≈ ${kgWeekTxt(e.weekly)}`;
+  return `Gastás ≈ ${fmtK(e.tdee)} kcal por día y tu meta es comer eso mismo: <b>ni déficit ni superávit</b>`;
+}
+// Avisos cuando algo limita el ritmo (en palabras simples)
+function planWarn(e, goal) {
+  if (e.reason === 'capped') return `Con la comida hacés el déficit máximo (${fmtK(MAX_DEFICIT)} kcal por día, así no perdés músculo). Para ir más rápido, el acelerador es el entrenamiento: lo que quemás y no te comés, suma directo.`;
+  if (e.reason === 'floored') return `Tu meta quedó en ${fmtK(e.sexFloor)} kcal, el mínimo para comer bien. El resto del déficit lo hace el entrenamiento: las primeras ${fmtK(e.gap)} kcal que quemás van directo a bajar.`;
+  if (e.reason === 'lowtdee') return `Tu cuerpo gasta poco en un día quieto (≈ ${fmtK(e.tdee)} kcal), menos que el mínimo para comer bien (${fmtK(e.sexFloor)}). Tu motor para bajar es moverte: cada caminata cuenta, y las primeras ${fmtK(e.gap)} kcal que quemás van directo a bajar.`;
+  if (e.reason === 'manual' && goal === 'bajar' && e.kcal < e.sexFloor) return `⚠️ Tu meta manual está por debajo del mínimo recomendado (${fmtK(e.sexFloor)} kcal). Hacelo solo con un médico o nutricionista.`;
+  if (e.reason === 'manual' && goal === 'bajar' && e.adj >= 0) return 'Con tu meta manual comés lo mismo o más de lo que gastás: así no vas a bajar.';
+  return '';
+}
+// Balance real de un día: gasto (tu día normal + lo que entrenaste) − lo que comiste
+function dayBalance(d) { const t = dayTotals(d); return { eat: t.kcal, spend: T().tdee + t.burn, burn: t.burn, bal: T().tdee + t.burn - t.kcal, n: t.n }; }
+function weekBalance() {
+  const ws = weekStart(today()); let bal = 0, n = 0;
+  for (let i = 0; i < 7; i++) { const d = addDays(ws, i); if (d > today()) break; const v = S.days[d]; if (!v || !isLogged(v)) continue; if (d === today()) continue; bal += dayBalance(v).bal; n++; }
+  return { bal, n };
+}
+function balanceStrip() {
+  const t = T(), b = dayBalance(S.day), isToday = S.date === today(), goal = S.profile.goal, wk = weekBalance();
+  if (!b.n) return `<div class="bal" data-t="balance" onclick="openPlan()"><div class="bal-l">${planLine(t, goal)}</div><div class="bal-more">¿Cómo se calcula? ›</div></div>`;
+  const def = b.bal >= 0; const g = Math.abs(b.bal) / 7.7;
+  return `<div class="bal" data-t="balance" onclick="openPlan()">
+    <div class="bal-row"><span>Gastás ${isToday ? 'hoy' : 'ese día'}</span><b class="num">≈ ${fmtK(b.spend)}</b></div>
+    <div class="bal-row"><span>Comiste</span><b class="num">${fmtK(b.eat)}</b></div>
+    <div class="bal-row tot"><span>${isToday ? 'Si cerrás el día así' : 'Resultado del día'}</span><b class="num" style="color:${def ? 'var(--good)' : 'var(--bad)'}">${def ? 'déficit' : 'superávit'} ${fmtK(Math.abs(b.bal))} kcal</b></div>
+    <small class="muted">${def ? `≈ ${fmtK(g)} g de grasa ${goal === 'subir' ? 'gastada (para subir te conviene comer más)' : 'menos'}` : `≈ ${fmtK(g)} g ${goal === 'subir' ? 'para construir 💪' : 'de más'}`}${wk.n ? ` · Esta semana (${wk.n} ${wk.n === 1 ? 'día cerrado' : 'días cerrados'}): ${wk.bal >= 0 ? 'déficit' : 'superávit'} ${fmtK(Math.abs(wk.bal))} kcal ≈ ${fmt1(Math.abs(wk.bal) / KCAL_KG)} kg` : ''}</small>
+    <div class="bal-more">Tu plan: ${goal === 'bajar' ? `déficit de ${fmtK(Math.max(0, -t.adj))} kcal/día` : goal === 'subir' ? `superávit de ${fmtK(Math.max(0, t.adj))} kcal/día` : 'comer lo que gastás'} · ¿Cómo se calcula? ›</div></div>`;
+}
+// La explicación completa, con tus números
+function openPlan() {
+  const p = S.profile, t = T(), goal = p.goal || 'mantener', lvl = (ACT_LEVELS.find(l => l.v == t.act) || {}), ex = p.exPct ?? 100;
+  const mx = Math.max(t.tdee, t.kcal), bw = v => Math.max(4, v / mx * 100);
+  const bars = `<div class="plan-bars">
+    <div class="pb"><small>Gastás por día</small><div class="pbar"><i style="width:${bw(t.tdee)}%;background:var(--brand)"></i><b class="num">${fmtK(t.tdee)}</b></div></div>
+    <div class="pb"><small>Tu meta para comer</small><div class="pbar"><i style="width:${bw(t.kcal)}%;background:var(--good)"></i><b class="num">${fmtK(t.kcal)}</b></div></div>
+    <div class="center mt"><b style="font-size:1.1rem">${t.adj < -5 ? `Déficit: ${fmtK(-t.adj)} kcal por día` : t.adj > 5 ? `Superávit: ${fmtK(t.adj)} kcal por día` : 'Comés lo que gastás'}</b><br><small class="muted">${goal === 'bajar' && t.weekly < -0.05 ? scaleTxt(t, t.w) : Math.abs(t.weekly) >= 0.05 ? `≈ ${kgWeekTxt(t.weekly)} · ≈ ${fmt1(Math.abs(t.weekly) * 4.35)} kg por mes` : 'tu peso se mantiene'}</small></div></div>`;
+  const step = (n, title, body) => `<div class="pstep"><div class="pn">${n}</div><div class="grow"><b>${title}</b><div class="muted">${body}</div></div></div>`;
+  const warn = planWarn(t, goal);
+  const lines = [
+    step(1, `Tu cuerpo en reposo: ${fmtK(t.bmr)} kcal`, `Lo que gastás aunque estés todo el día quieto/a: respirar, el corazón, la temperatura. Sale de tu peso (${fmt1(t.w)} kg), altura, edad y sexo${t.formula === 'Katch-McArdle' ? ', usando tu masa magra (Katch-McArdle)' : ' (fórmula Mifflin-St Jeor)'}.`),
+    step(2, `Tu día normal: × ${t.act.toFixed(3).replace(/0+$/, '').replace('.', ',')} = ${fmtK(t.tdee)} kcal`, `Le sumamos tu movimiento de todos los días (${esc(lvl.t || 'tu nivel')}), <b>sin</b> los entrenamientos: esos los cargás aparte y se suman solos.`),
+    goal === 'bajar' && t.reason !== 'manual' ? step(3, `Tu déficit: −${fmtK(-t.adj)} kcal por día`, `Para bajar grasa hay que comer menos de lo que gastás. 1 kg de grasa son unas 7.700 kcal. Tu ritmo (${String(pacePct(p)).replace('.', ',')} % de tu peso por semana) ${t.reason === 'ok' ? `pide ${fmtK(-t.adj)} kcal menos por día` : 'queda limitado (mirá el aviso de arriba)'}.`)
+      : goal === 'subir' && t.reason !== 'manual' ? step(3, `Tu superávit: +${fmtK(t.adj)} kcal por día`, 'Para ganar músculo hay que comer un poco más de lo que gastás y entrenar fuerza. Poquito: si te pasás, se va a grasa.')
+      : t.reason === 'manual' ? step(3, 'Meta manual', `Pusiste ${fmtK(t.kcal)} kcal a mano en Perfil. Eso da ${t.adj < 0 ? `un déficit de ${fmtK(-t.adj)}` : t.adj > 0 ? `un superávit de ${fmtK(t.adj)}` : 'cero de diferencia'} kcal por día.`)
+      : step(3, 'Sin ajuste', 'Para mantener, la meta es comer lo mismo que gastás.'),
+    step(4, `Tu meta: ${fmtK(t.kcal)} kcal por día`, `${fmtK(t.tdee)} ${t.adj < 0 ? '−' : '+'} ${fmtK(Math.abs(t.adj))} = ${fmtK(t.kcal)}. Es el número de "Meta" en Hoy. Con ${t.p} g de proteína, ${t.c} g de carbos y ${t.f} g de grasas.`),
+    step(5, 'Si entrenás', ex === 0 ? 'Elegiste que el ejercicio no se sume: todo lo que quemás va directo al déficit (bajás más rápido).'
+      : `Lo que quemás se suma a tu meta del día (${ex === 100 ? 'todo' : `el ${ex} %`}), así no comés de menos.${t.gap ? ` Pero como tu meta quedó en el mínimo, las primeras ${fmtK(t.gap)} kcal van al déficit.` : ''} Ojo: los relojes y las máquinas suelen inflar las kcal; si no bajás, poné 50 % en Perfil.`),
+    goal === 'bajar' ? step(6, 'Cómo ir más rápido', `El acelerador es moverte y no comerte esas kcal: 45 min por día de caminata rápida, bici o pesas son ≈ ${fmtK(5 * t.w * 0.75)} kcal, o sea ≈ ${fmt1(5 * t.w * 0.75 * 7 / KCAL_KG)} kg más por semana. En Perfil → "kcal de ejercicio que suman" elegí "Ninguna" o "La mitad". Dormir 7-8 h y tomar agua también ayudan (con sueño y estrés el cuerpo retiene líquido).`) : '',
+    step(goal === 'bajar' ? 7 : 6, 'Qué esperar', `${goal === 'bajar' ? 'Las primeras 1-2 semanas la balanza baja mucho (hasta 2-4 kg si tenés bastante para bajar): se va agua y eso también cuenta como arranque. Después se estabiliza en el ritmo de la grasa. ' : ''}La balanza sube y baja 0,5 a 1 kg de un día a otro por agua y sal: mirá la tendencia de la semana, no el día. La app recalcula sola cada vez que te pesás.`)
+  ];
+  openSheet(`<div class="sheet-h"><h2>¿De dónde sale tu meta?</h2><button class="x" onclick="closeSheet()">✕</button></div>
+    ${bars}${warn ? `<div class="nudge mt">${warn}</div>` : ''}<div class="mt2">${lines.join('')}</div>
+    <button class="btn block mt2" onclick="closeSheet();go('mas')">Cambiar ritmo u objetivo</button>`);
 }
 function entryTot(e) {
   if (e.quick) return { kcal: e.kcal || 0, p: e.p || 0, c: e.c || 0, f: e.f || 0 };
   const m = (e.g || 0) / 100; return { kcal: e.k * m, p: e.p * m, c: e.c * m, f: e.f * m };
 }
 function actNet(a) { return a.kcal != null ? a.kcal : 0; }
+// counted = las kcal de ejercicio que se suman a tu meta. Si tu meta quedó en el mínimo seguro,
+// el ejercicio primero completa el déficit que faltaba, y recién lo que sobra se suma para comer.
 function dayTotals(d) {
   const t = { kcal: 0, p: 0, c: 0, f: 0, burn: 0, min: 0, n: 0 };
   (d?.foods || []).forEach(e => { const x = entryTot(e); t.kcal += x.kcal; t.p += x.p; t.c += x.c; t.f += x.f; t.n++; });
   (d?.acts || []).forEach(a => { t.burn += actNet(a); t.min += a.min || 0; });
-  t.counted = t.burn * ((S.profile?.exPct ?? 100) / 100);
+  t.exAll = t.burn * ((S.profile?.exPct ?? 100) / 100);
+  t.gapUsed = t.burn ? Math.min(t.exAll, T().gap || 0) : 0;
+  t.counted = t.exAll - t.gapUsed;
   return t;
 }
 // Cada día guarda la meta que tenía ese día: si cambia tu peso, el historial no se reescribe.
 function dayGoal(d) { return (d && d.goal) || T().kcal; }
+// ¿Ese día quedó dentro de la meta? Entrenar nunca te saca de la meta, y comer muy por debajo del mínimo no cuenta.
 function inGoal(d) {
-  const t = dayTotals(d); if (!t.n) return false; const r = t.kcal / (dayGoal(d) + t.counted); const g = S.profile?.goal;
-  if (g === 'bajar') return r >= 0.75 && r <= 1.05;   // comer un poco menos también es cumplir
-  if (g === 'subir') return r >= 0.95 && r <= 1.15;
-  return r >= 0.9 && r <= 1.1;
+  const t = dayTotals(d); if (!t.n) return false; const g = S.profile?.goal, goal = dayGoal(d), full = goal + t.counted;
+  if (g === 'bajar') { const lo = Math.min(goal * 0.9, Math.max(goal * 0.8, sexFloorOf(S.profile) * 0.9)); return t.kcal >= lo && t.kcal <= full * 1.05; }
+  if (g === 'subir') return t.kcal >= full * 0.95 && t.kcal <= full * 1.15;
+  return t.kcal >= goal * 0.9 && t.kcal <= full * 1.1;
 }
 function isLogged(d) { return (d?.foods || []).length > 0; }
 function streakFrom(dates) {
@@ -598,7 +717,7 @@ async function dedupeBody(list) {
 }
 async function loadDays() {
   const jan1 = today().slice(0, 4) + '-01-01'; const from = [addDays(today(), -120), addDays(jan1, -7)].sort()[0];
-  const list = await Store.getDaysRange(from, today());
+  S.daysFrom = from; const list = await Store.getDaysRange(from, today());
   S.days = {}; list.forEach(d => { S.days[d.id] = normDay(d, d.id); });
 }
 // Abre un día. Si tocás las flechas rápido, solo gana el último pedido (no se mezclan días).
@@ -623,7 +742,7 @@ function watchDay(d) {
 // Todo cambio de un día pasa por acá: se aplica al instante en pantalla y se guarda solo lo que cambió.
 async function dayOp(op) {
   const day = S.day; const date = day.date; S.days[date] = day;
-  applyOpDay(day, op); day.goal = T().kcal;
+  applyOpDay(day, op); if (date === today() || !day.goal) day.goal = T().kcal;   // los días pasados conservan su meta
   if (S.tab === 'hoy' || S.tab === 'act') render();
   try { await Store.applyDayOp(date, op, day.goal); } catch (e) { console.error(e); toast('No se pudo guardar: ' + (e.message || e)); }
   publishShared();
@@ -688,39 +807,60 @@ function authErr(e) {
 async function doReset() { const e = $('#au-mail').value.trim(); if (!e) return toast('Escribí tu mail arriba'); try { await Store.resetPass(e); toast('Te mandé un mail para cambiarla'); } catch (err) { toast(authErr(err)); } }
 
 function profileForm(p = {}) {
-  return `
+  return `<div id="pf-wrap" onchange="refreshPace(event)" oninput="refreshPace(event)">
   <label>Nombre</label><input id="pf-name" value="${esc(p.name || S.user?.name || S.pendingName || '')}">
   <div class="grid2 mt">
     <div><label>Sexo (para la fórmula)</label><select id="pf-sex"><option value="M" ${p.sex === 'M' ? 'selected' : ''}>Hombre</option><option value="F" ${p.sex === 'F' ? 'selected' : ''}>Mujer</option></select></div>
     <div><label>Fecha de nacimiento</label><input id="pf-birth" type="date" value="${esc(p.birth || '')}"></div>
     <div><label>Altura (cm)</label><input id="pf-h" inputmode="decimal" value="${p.height || ''}"></div>
-    <div><label>Peso actual (kg)</label><input id="pf-w" inputmode="decimal" value="${p.height ? fmt1(curWeight()) : ''}" oninput="if($('#pf-goal').value==='bajar')$('#pf-pace').innerHTML=paceOptions('bajar',{pacePct:parseFloat($('#pf-pace').value)})"></div>
+    <div><label>Peso actual (kg)</label><input id="pf-w" inputmode="decimal" value="${p.height ? fmt1(curWeight()) : ''}"></div>
   </div>
   <div class="mt"><label>Tu día a día, SIN contar entrenamientos (esos se cargan aparte)</label>
   <select id="pf-act">${ACT_LEVELS.map(l => `<option value="${l.v}" ${(p.act || 1.2) == l.v ? 'selected' : ''}>${l.t} · ${l.d}</option>`).join('')}</select></div>
   <div class="grid2 mt">
     <div><label>Objetivo</label><select id="pf-goal" onchange="pfGoalChanged()">
       <option value="bajar" ${p.goal === 'bajar' ? 'selected' : ''}>Bajar grasa</option><option value="mantener" ${(p.goal || 'mantener') === 'mantener' ? 'selected' : ''}>Mantener</option><option value="subir" ${p.goal === 'subir' ? 'selected' : ''}>Ganar músculo</option></select></div>
-    <div id="pf-pace-w" style="${(p.goal || 'mantener') === 'mantener' ? 'display:none' : ''}"><label>Ritmo</label><select id="pf-pace">${paceOptions(p.goal || 'mantener', p)}</select></div>
+    <div id="pf-pace-w" style="${(p.goal || 'mantener') === 'mantener' ? 'display:none' : ''}"><label>Ritmo</label><select id="pf-pace">${paceOptions(p.goal || 'mantener', p, false)}</select></div>
   </div>
   <div id="pf-gw-w" class="mt" style="${p.goal === 'bajar' ? '' : 'display:none'}"><label>Peso objetivo (kg) — opcional, para ver cuándo llegás</label><input id="pf-gw" inputmode="decimal" value="${p.goalW ? fmt1(p.goalW) : ''}" placeholder="Ej: 85"></div>
-  <small class="muted" id="pf-pace-note" style="display:block;margin-top:6px">${paceNote(p.goal || 'mantener')}</small>`;
+  <small class="muted" id="pf-pace-note" style="display:block;margin-top:6px">${paceNote(p.goal || 'mantener')}</small>
+  <div class="src mt" id="pf-preview">${planPreview(p, false)}</div></div>`;
 }
-function paceOptions(goal, p = {}) {
-  const w = (num($('#pf-w')?.value) || curWeight());
-  if (goal === 'subir') return [[0.25, 'Tranquilo · ~0,25 kg por semana (+275 kcal)'], [0.5, 'Rápido · ~0,5 kg por semana (+550 kcal)']].map(([v, t]) => `<option value="${v}" ${(p.pace === 0.5 ? 0.5 : 0.25) === v ? 'selected' : ''}>${t}</option>`).join('');
+// Lo que está escrito en el formulario (sin guardar), para mostrar cómo quedaría la meta
+function pfSnap(base0, dom = true) {
+  const g = id => dom ? $(id)?.value : undefined; const base = { ...(S.profile || {}), ...(base0 || {}) };
+  const pp = { ...base, sex: g('#pf-sex') || base.sex || 'M', birth: g('#pf-birth') || base.birth, height: num(g('#pf-h')) || base.height, act: parseFloat(g('#pf-act')) || base.act || 1.2, goal: g('#pf-goal') || base.goal || 'mantener', formula: g('#pf-formula') || base.formula };
+  if (dom && $('#pf-man')) pp.manualKcal = num(g('#pf-man')) || null;
+  const pv = parseFloat(g('#pf-pace')); if (pp.goal === 'bajar' && pv) pp.pacePct = pv; if (pp.goal === 'subir' && pv) pp.pace = pv;
+  return { pp, w: num(g('#pf-w')) || (S.profile?.height ? curWeight() : null) };
+}
+function planPreview(base, dom = true) {
+  const { pp, w } = pfSnap(base, dom); if (!pp.height || !w) return '<small class="muted">Completá tus datos y te muestro tu meta.</small>';
+  const e = energyFor(pp, w); const warn = planWarn(e, pp.goal);
+  const sc = pp.goal === 'bajar' ? scaleTxt(e, w) : '';
+  return `<b>Así queda tu meta: ${fmtK(e.kcal)} kcal por día</b><div class="mt" style="font-size:.9rem">${planLine(e, pp.goal)}</div>${sc ? `<div class="mt" style="font-size:.85rem">${sc}</div>` : ''}${warn ? `<div class="mt" style="font-size:.85rem">${warn}</div>` : ''}`;
+}
+function refreshPace(ev) {
+  if (ev && ev.target && ev.target.id === 'pf-name') return;
+  const sel = $('#pf-pace'), g = $('#pf-goal')?.value;
+  if (sel && g && g !== 'mantener' && ev?.target?.id !== 'pf-pace') { const v = parseFloat(sel.value); sel.innerHTML = paceOptions(g, g === 'bajar' ? { pacePct: v || 0.75 } : { pace: v || 0.25 }); }
+  const pv = $('#pf-preview'); if (pv) pv.innerHTML = planPreview();
+}
+function paceOptions(goal, p = {}, dom = true) {
+  const snap = pfSnap(p, dom); const pp = { ...snap.pp, goal, manualKcal: null }, w = snap.w || curWeight();
+  if (goal === 'subir') return [[0.25, 'Tranquilo'], [0.5, 'Rápido']].map(([v, t]) => { const e = energyFor(pp, w, { pace: v }); return `<option value="${v}" ${(p.pace === 0.5 ? 0.5 : 0.25) === v ? 'selected' : ''}>${t} · ~${fmt1(v)} kg por semana (+${fmtK(e.adj)} kcal/día)</option>`; }).join('');
   const cur = pacePct(p);
-  const cap = MAX_DEFICIT * 7 / KCAL_KG;
-  return PACES_BAJAR.map(([v, t]) => { const want = w * v / 100, kg = Math.min(want, cap); return `<option value="${v}" ${cur === v ? 'selected' : ''}>${t} · ${String(v).replace('.', ',')} % de tu peso (≈${fmt1(kg)} kg por semana${want > cap ? ', con tope' : ''})</option>`; }).join('');
+  // Los kilos que muestra cada opción son los REALES: ya tienen en cuenta el tope y el mínimo
+  return PACES_BAJAR.map(([v, t]) => { const e = energyFor(pp, w, { pct: v }); return `<option value="${v}" ${cur === v ? 'selected' : ''}>${t} · ${String(v).replace('.', ',')} % → ≈${fmt1(Math.max(0, -e.weekly))} kg/sem (−${fmtK(Math.max(0, -e.adj))} kcal/día)</option>`; }).join('');
 }
 function paceNote(goal) {
-  if (goal === 'bajar') return 'El ritmo se calcula sobre tu peso: con más kilos se baja más rápido, y se va acomodando solo. Tope: 1.000 kcal de déficit por día (más que eso, solo con un médico).';
+  if (goal === 'bajar') return 'El ritmo es un % de tu peso: con más kilos se baja más rápido. Los kg son de grasa; las primeras semanas la balanza baja bastante más (agua). Y todo lo que entrenes sin comértelo, suma.';
   if (goal === 'subir') return 'Para ganar músculo y no grasa, conviene ir lento y entrenar fuerza.';
   return '';
 }
 function pfGoalChanged() {
   const g = $('#pf-goal').value; $('#pf-pace-w').style.display = g === 'mantener' ? 'none' : ''; $('#pf-gw-w').style.display = g === 'bajar' ? '' : 'none';
-  $('#pf-pace').innerHTML = paceOptions(g, { ...(S.profile || {}), goal: g }); $('#pf-pace-note').textContent = paceNote(g);
+  $('#pf-pace').innerHTML = paceOptions(g, { ...(S.profile || {}), goal: g }); $('#pf-pace-note').textContent = paceNote(g); refreshPace();
 }
 function readProfileForm() {
   const o = {
@@ -744,7 +884,7 @@ function renderOnboarding() {
 }
 async function finishOnboarding() {
   try {
-    const { o, w } = readProfileForm();
+    const { o, w } = readProfileForm(); if (o.goalW) o.goalStartW = w; if (o.goal === 'bajar') o.planStart = today();
     o.exPct = 100; o.formula = 'mifflin'; o.share = { kcal: true, streak: true, activity: true, progress: true, weight: false, body: false };
     await Store.saveProfile(o); S.profile = { ...(S.profile || {}), ...o };
     const e = { id: rid(), date: today(), w }; await Store.saveBody(e); S.body.push(e);
@@ -788,7 +928,7 @@ function entryLabel(e) {
   return (e.q && e.q !== 1 ? `${fmt1(e.q)} × ` : '') + e.pl;
 }
 function renderHoy() {
-  const t = T(), tot = dayTotals(S.day), budget = t.kcal + tot.counted, left = budget - tot.kcal;
+  const t = T(), tot = dayTotals(S.day), dg = S.date === today() ? t.kcal : dayGoal(S.day), budget = dg + tot.counted, left = budget - tot.kcal;
   const over = left < 0; const pct = budget ? tot.kcal / budget : 0;
   const color = over ? 'var(--bad)' : pct > 0.9 ? 'var(--warn)' : 'var(--good)';
   const nudges = [];
@@ -808,13 +948,14 @@ function renderHoy() {
     <div class="row" style="gap:16px">
       <div class="ringwrap" data-t="ring">${ring(pct, color)}<div class="in"><div class="big num" style="color:${over ? 'var(--bad)' : 'inherit'}">${fmtK(Math.abs(left))}</div><small><b>${over ? 'kcal de más' : 'kcal restantes'}</b></small></div></div>
       <div class="eq grow" data-t="eq">
-        <span>Meta</span><b class="num">${fmtK(t.kcal)}</b>
+        <span>Meta</span><b class="num">${fmtK(dg)}</b>
         <span>+ Ejercicio</span><b class="num">${fmtK(tot.counted)}</b>
         <span>− Comido</span><b class="num">${fmtK(tot.kcal)}</b>
         <span style="border-top:1px solid var(--line);padding-top:3px">${over ? 'Excedido' : 'Restan'}</span><b class="num" style="border-top:1px solid var(--line);padding-top:3px;color:${color}">${fmtK(left)}</b>
       </div>
     </div>
     <div class="macro3 mt2" data-t="macros">${macroBar('Proteína', tot.p, t.p, 'var(--prot)')}${macroBar('Carbos', tot.c, t.c, 'var(--carb)')}${macroBar('Grasas', tot.f, t.f, 'var(--fat)')}</div>
+    ${balanceStrip()}
   </div>
   ${MEALS.map(([k, name, ic]) => {
     const list = S.day.foods.filter(e => e.meal === k); const kc = list.reduce((s, e) => s + entryTot(e).kcal, 0);
@@ -1209,7 +1350,8 @@ function afUpd() { if (!S.af.manual) { S.af.kcal = r0(afCalc()); $('#af-k').valu
 async function saveAct(id) {
   const d = ACT_BY_ID[S.af.type]; if (!S.af.min) return toast('¿Cuántos minutos?');
   const a = { id: id || rid(), ts: S.af.ts || Date.now(), type: S.af.type, name: d[1], min: S.af.min, kcal: r0(S.af.manual ? S.af.kcal : afCalc()), manual: S.af.manual || false, met: d[3], w: afWeight() };
-  closeSheet(); await dayOp({ putAct: a }); toast(`+${a.kcal} kcal a tu presupuesto 💪`);
+  closeSheet(); await dayOp({ putAct: a }); const tt = dayTotals(S.day);
+  toast(tt.gapUsed > 0 ? `💪 ${fmtK(a.kcal)} kcal quemadas: completan tu déficit${tt.counted >= 1 ? ` y te quedan +${fmtK(tt.counted)} para comer` : ''}` : (S.profile.exPct ?? 100) === 0 ? `💪 ${fmtK(a.kcal)} kcal quemadas (van todas al déficit)` : `+${fmtK(a.kcal * (S.profile.exPct ?? 100) / 100)} kcal a tu presupuesto 💪`, 3500);
 }
 async function delAct(id) { closeSheet(); await dayOp({ delAct: id }); }
 
@@ -1301,6 +1443,7 @@ async function saveBody(id) {
   for (const m of BM) { const v = num($('#bf-' + m.k)?.value); if (v != null) e[m.k] = v; }
   if (e.mus != null && $('#bf-musu').value === '%') { if (!e.w) return toast('Para pasar el músculo de % a kg necesito el peso'); e.mus = r1(e.w * e.mus / 100); }
   if (Object.keys(e).length <= 2) return toast('Cargá al menos un dato');
+  for (const m of BM) { const r = BM_RANGE[m.k], v = e[m.k]; if (v != null && r && (v < r[0] || v > r[1])) return toast(`Revisá ${m.t.toLowerCase()}: ${fmt1(v)} ${m.u} parece un error`); }
   if (e.date > today()) return toast('No se pueden cargar mediciones del futuro');
   // Una sola medición por día: si ya había una ese día, se combinan
   const same = S.body.find(x => x.date === e.date && x.id !== e.id);
@@ -1311,8 +1454,8 @@ async function saveBody(id) {
   closeSheet(); render(); await Store.saveBody(merged); publishShared();
   const isLatest = merged.w != null && !S.body.some(b => b.w != null && b.date > merged.date);
   if (S.profile.goal === 'bajar' && isLatest && prevW && merged.w < prevW.w - 0.05) {
-    const start = (S.body.find(b => b.w != null) || {}).w;
-    celebrate(`¡Bajaste ${fmt1(prevW.w - merged.w)} kg!`, `Desde que empezaste: ${fmt1(start - merged.w)} kg menos. Mirá cómo se pone tu capi 🦫`, fatBefore, capiFat());
+    const d0 = startWeight() - merged.w;
+    celebrate(`¡Bajaste ${fmt1(prevW.w - merged.w)} kg!`, d0 > 0.05 ? `Desde que empezaste: ${fmt1(d0)} kg menos. Mirá cómo se pone tu capi 🦫` : 'Mirá cómo se pone tu capi 🦫', fatBefore, capiFat());
   } else toast(same ? 'Sumado a la medición de ese día 📈' : 'Medición guardada 📈');
 }
 async function delBody(id) { if (!confirm('¿Eliminar esta medición?')) return; S.body = S.body.filter(x => x.id !== id); closeSheet(); render(); await Store.deleteBody(id); publishShared(); }
@@ -1393,20 +1536,20 @@ function capiSVG(f = 0.6, mood = 'happy', o = {}) {
 // Qué tan gordito está el capi según el progreso hacia la meta (1 = al empezar, 0,18 = llegó)
 function capiFatFor(w) {
   const p = S.profile || {}; if (p.goal !== 'bajar') return 0.55;
-  const start = (S.body.find(b => b.w != null) || {}).w || w; if (!w || !start) return 1;
-  let prog = p.goalW && start > p.goalW ? (start - w) / (start - p.goalW) : (start - w) / start / 0.10;
+  const start = startWeight(); if (!w || !start) return 1;
+  let prog = p.goalW && start - p.goalW > 0.3 ? (start - w) / (start - p.goalW) : (start - w) / start / 0.10;
   prog = Math.max(0, Math.min(1, prog)); return 1 - prog * 0.82;
 }
 function capiFat() { return capiFatFor(curWeight()); }
 function capiState() {
-  const t = T(), tot = dayTotals(S.day), budget = t.kcal + tot.counted, left = budget - tot.kcal, h = new Date().getHours();
+  const t = T(), tot = dayTotals(S.day), budget = (S.date === today() ? t.kcal : dayGoal(S.day)) + tot.counted, left = budget - tot.kcal, h = new Date().getHours();
   const isToday = S.date === today(); const streak = streakFrom(myLoggedDates());
   const o = { band: (S.day.acts || []).length > 0, tang: streak >= 3 };
   let mood = 'happy', say = [];
   if (!tot.n && isToday && h >= 10) { mood = 'hungry'; say.push(h < 15 ? 'Tengo hambre… ¿qué comimos hoy? Cargalo así no se nos olvida 🍽️' : '¡No cargamos nada hoy! Contame qué comiste 🍽️'); }
   else if (left < 0) { mood = 'full'; say.push(`Uf, hoy nos pasamos ${fmtK(-left)} kcal. No pasa nada: mañana arrancamos de nuevo 💪`); }
   else if (tot.n && budget && tot.kcal / budget > 0.9) say.push(`Ya casi llegamos: quedan ${fmtK(left)} kcal. Algo liviano si picamos 👀`);
-  if (o.band) say.push(`¡Qué entrenamiento! Me gané la vincha. +${fmtK(tot.burn)} kcal para comer hoy 🏃`);
+  if (o.band) say.push(tot.counted >= 1 ? `¡Qué entrenamiento! Me gané la vincha. +${fmtK(tot.counted)} kcal para comer hoy 🏃` : '¡Qué entrenamiento! Me gané la vincha. Eso ya va a tu déficit 🏃');
   if (isToday && h >= 15 && tot.n && !S.day.foods.some(e => e.meal === 'almuerzo')) say.push('¿Cargaste el almuerzo? 🍽️');
   if (isToday && h >= 22 && tot.n && !S.day.foods.some(e => e.meal === 'cena')) say.push('Falta la cena 🌙');
   const lw = lastBody('w'); if (isToday && (!lw || (Date.now() - parseYmd(lw.date).getTime()) > 7 * 864e5)) say.push('Toca pesarse: una vez por semana, en ayunas y después del baño ⚖️');
@@ -1429,7 +1572,7 @@ function capiCard() {
 // ---------- Transformación animada ----------
 function transformCard() {
   const p = S.profile; if (p.goal !== 'bajar') return '';
-  const start = (S.body.find(b => b.w != null) || {}).w; if (!start) return '';
+  const start = startWeight(); if (!start) return '';
   const goalF = 0.18, cur = capiFat();
   return `<div class="card" data-t="capi-tf"><div class="row between"><h3>🦫 Tu capi</h3><button class="btn sm primary" onclick="playTransform()">▶ Ver transformación</button></div>
     <div class="center" style="max-width:220px;margin:6px auto 0"><div class="capi" id="tf-capi" onclick="capiTap(this)">${capiSVG(cur, 'happy')}</div></div>
@@ -1442,7 +1585,7 @@ function transformCard() {
 let _tfRun = 0;
 function playTransform() {
   const run = ++_tfRun; const el = $('#tf-capi'), lab = $('#tf-label'); if (!el) return;
-  const p = S.profile, start = (S.body.find(b => b.w != null) || {}).w, now = curWeight(), cur = capiFat();
+  const p = S.profile, start = startWeight(), now = curWeight(), cur = capiFat();
   const pr = p.goalW ? projection(p.goalW) : null; const goalF = 0.18;
   const ease = x => x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
   const anim = (f0, f1, w0, w1, ms, text, done) => {
@@ -1453,8 +1596,8 @@ function playTransform() {
     requestAnimationFrame(step);
   };
   el.style.opacity = 1; lab.innerHTML = `Al empezar: ${fmt1(start)} kg`;
-  setTimeout(() => anim(1, cur, start, now, 2600, w => `${fmt1(w)} kg <small class="muted">· −${fmt1(start - w)} kg</small>`, () => {
-    lab.innerHTML = `¡Hoy: ${fmt1(now)} kg! Ya bajaste ${fmt1(start - now)} kg 💪`;
+  setTimeout(() => anim(1, cur, start, now, 2600, w => `${fmt1(w)} kg <small class="muted">· ${start - w >= 0 ? '−' : '+'}${fmt1(Math.abs(start - w))} kg</small>`, () => {
+    lab.innerHTML = start - now > 0.05 ? `¡Hoy: ${fmt1(now)} kg! Ya bajaste ${fmt1(start - now)} kg 💪` : `Hoy: ${fmt1(now)} kg. ¡El camino arranca ahora! 💪`;
     setTimeout(() => {
       if (run !== _tfRun) return; el.style.transition = 'opacity .6s'; el.style.opacity = .6;
       anim(cur, goalF, now, p.goalW || null, 2600, w => `${fmt1(w)} kg <small class="muted">· así vas a quedar…</small>`, () => {
@@ -1524,12 +1667,13 @@ async function coachModel(system, model) {
 
 // ---------- Lo que el capi sabe de vos (se arma de nuevo en cada pregunta) ----------
 function coachContext() {
-  const p = S.profile, t = T(), w = curWeight(), start = (S.body.find(b => b.w != null) || {}).w;
+  const p = S.profile, t = T(), w = curWeight(), start = startWeight();
   const goalTxt = { bajar: 'bajar de peso (grasa)', mantener: 'mantener el peso', subir: 'ganar músculo' }[p.goal] || p.goal;
   const L = [];
   L.push(`Hoy es ${fmtDate(today())} ${today().slice(0, 4)}, son las ${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, '0')}.`);
-  L.push(`PERFIL: ${p.name}, ${p.sex === 'M' ? 'hombre' : 'mujer'}, ${ageFrom(p.birth)} años, ${p.height} cm, peso actual ${fmt1(w)} kg (IMC ${fmt1(t.bmi)}). Objetivo: ${goalTxt}${p.goal === 'bajar' ? `, ritmo ${String(pacePct(p)).replace('.', ',')} % del peso por semana` : ''}${p.goalW ? `, peso objetivo ${fmt1(p.goalW)} kg` : ''}. Nivel de actividad diaria (sin entrenar): ${(ACT_LEVELS.find(l => l.v == p.act) || {}).t || p.act}.`);
-  L.push(`META DIARIA EN LA APP: ${fmtK(t.kcal)} kcal (+ lo que queme entrenando${(p.exPct ?? 100) < 100 ? `, cuenta el ${p.exPct} %` : ''}). Proteína ${t.p} g, carbohidratos ${t.c} g, grasas ${t.f} g, agua ${fmtK(t.water)} ml. Cálculo: basal ${fmtK(t.bmr)} × actividad = gasto ${fmtK(t.tdee)} kcal; ajuste por objetivo ${fmtK(t.adj)} kcal${t.capped ? ' (con tope de 1.000 kcal de déficit)' : ''}; cambio esperado ${fmt1(t.weekly)} kg/semana.${t.manual ? ' Usa meta manual.' : ''}`);
+  L.push(`PERFIL: ${p.name}, ${p.sex === 'M' ? 'hombre' : 'mujer'}, ${ageFrom(p.birth)} años, ${p.height} cm, peso actual ${fmt1(w)} kg (IMC ${fmt1(t.bmi)}). Objetivo: ${goalTxt}${p.goal === 'bajar' ? `, ritmo elegido ${String(pacePct(p)).replace('.', ',')} % del peso por semana (real: ${fmt1(-t.weekly)} kg/semana)` : ''}${p.goalW ? `, peso objetivo ${fmt1(p.goalW)} kg` : ''}. Nivel de actividad diaria (sin entrenar): ${(ACT_LEVELS.find(l => l.v == p.act) || {}).t || p.act}.`);
+  L.push(`META DIARIA EN LA APP: ${fmtK(t.kcal)} kcal (+ lo que queme entrenando${(p.exPct ?? 100) < 100 ? `, cuenta el ${p.exPct} %` : ''}). Proteína ${t.p} g, carbohidratos ${t.c} g, grasas ${t.f} g, agua ${fmtK(t.water)} ml. Cálculo: basal ${fmtK(t.bmr)} (${t.formula}) × actividad ${t.act} = gasto ${fmtK(t.tdee)} kcal; ajuste aplicado ${t.adj > 0 ? '+' : ''}${fmtK(t.adj)} kcal/día; cambio esperado ${fmt1(t.weekly)} kg/semana.${t.manual ? ' Usa meta manual.' : ''}${planWarn(t, p.goal) ? ' Nota: ' + planWarn(t, p.goal) : ''}`);
+  { const b = dayBalance(S.days[today()] || {}), wk = weekBalance(); L.push(`BALANCE: hoy gasta ≈ ${fmtK(b.spend)} kcal (día normal + entrenos) y comió ${fmtK(b.eat)} → ${b.bal >= 0 ? 'déficit' : 'superávit'} de ${fmtK(Math.abs(b.bal))} kcal hasta ahora.${wk.n ? ` Esta semana (${wk.n} días cerrados): ${wk.bal >= 0 ? 'déficit' : 'superávit'} acumulado de ${fmtK(Math.abs(wk.bal))} kcal ≈ ${fmt1(Math.abs(wk.bal) / KCAL_KG)} kg.` : ''}`); }
   if (p.goal === 'bajar' && p.goalW) { const pr = projection(p.goalW); if (pr && !pr.stuck) L.push(`PROYECCIÓN: llega a ${fmt1(p.goalW)} kg en ~${pr.weeks} semanas (aprox. ${fmtDate(pr.date)} ${pr.date.slice(0, 4)}); en 4 semanas ~${fmt1(pr.first4)} kg, en 12 semanas ~${fmt1(pr.first12)} kg.`); }
   const bw = S.body.slice(-12).map(b => `${b.date}: ${[b.w != null ? fmt1(b.w) + ' kg' : '', b.fat != null ? fmt1(b.fat) + '% grasa' : '', b.mus != null ? fmt1(b.mus) + ' kg músculo' : '', b.waist != null ? 'cintura ' + fmt1(b.waist) + ' cm' : ''].filter(Boolean).join(', ')}`);
   L.push(`MEDICIONES (últimas ${bw.length}${start ? `, empezó en ${fmt1(start)} kg` : ''}):\n${bw.join('\n') || 'sin mediciones'}`);
@@ -1562,7 +1706,7 @@ CÓMO RESPONDER
 - No tenés datos de la pareja: no hables de ella/él.
 
 SEGURIDAD (obligatorio)
-- Nunca recomiendes comer menos que la meta de la app, déficits de más de 1.000 kcal por día ni bajar más de ~1 % del peso por semana. Si piden ir más rápido, explicá con sus números por qué no conviene y sugerí hablarlo con un médico.
+- Nunca recomiendes comer menos que la meta de la app ni déficits de más de 1.000 kcal por día solo con comida. Si quieren ir más rápido, NO los desanimes: el acelerador es entrenar más (y no comerse esas kcal), dormir bien y cumplir la proteína. Las primeras semanas se baja mucho en la balanza (en buena parte agua): celebralo. Con mucho peso para bajar, sugerí además un chequeo médico, sin sermones.
 - No recomiendes ayunos extremos, laxantes, diuréticos, vomitar, pastillas para adelgazar ni suplementos milagrosos.
 - No diagnostiques ni indiques medicamentos. Ante síntomas (dolor de pecho, mareos, desmayos, falta de aire, dolor fuerte) decí que consulte a un médico o vaya a una guardia. Con mucho peso para bajar o problemas de salud, recomendá un chequeo médico.
 - Si aparecen señales de una relación difícil con la comida (culpa fuerte, compensar comiendo nada o vomitando, miedo a comer, atracones con angustia), respondé con cuidado, sin números de calorías, y sugerí hablar con un profesional de salud.
@@ -1690,6 +1834,7 @@ function coachFab() {
 const PERIODS = { week: ['Semana', 'semanal', 1], month: ['Mes', 'mensual', 4.35], quarter: ['Trimestre', 'trimestral', 13], year: ['Año', 'anual', 52] };
 const GOAL_TYPES = {
   kg: { t: 'Bajar kilos', u: 'kg', icon: '⚖️', dec: 1 },
+  kgup: { t: 'Subir kilos', u: 'kg', icon: '🏋️', dec: 1 },
   min: { t: 'Minutos de actividad', u: 'min', icon: '🏃', dec: 0 },
   sessions: { t: 'Entrenamientos', u: 'entrenamientos', icon: '💪', dec: 0 },
   logged: { t: 'Días cargando comida', u: 'días', icon: '📝', dec: 0 },
@@ -1715,11 +1860,13 @@ function prevPeriodStart(per, a) { return per === 'week' ? addDays(a, -7) : peri
 function weightAt(date, before) { const pts = S.body.filter(b => b.w != null); const prev = pts.filter(b => before ? b.date < date : b.date <= date); return prev.length ? prev[prev.length - 1] : null; }
 function goalProgress(g, a, b) {
   const end = b < today() ? b : today();
-  if (g.type === 'kg') {
+  if (g.type === 'kg' || g.type === 'kgup') {
     const start = weightAt(a, true) || S.body.find(x => x.w != null && x.date >= a && x.date <= end);
     const last = weightAt(end, false); if (!start || !last || last.date < a) return { v: 0, note: 'Pesate para ver el avance' };
-    return { v: Math.max(0, start.w - last.w), note: `${fmt1(start.w)} → ${fmt1(last.w)} kg` };
+    const d = g.type === 'kg' ? start.w - last.w : last.w - start.w;
+    return { v: Math.max(0, d), note: `${fmt1(start.w)} → ${fmt1(last.w)} kg` };
   }
+  if (a < (S.daysFrom || '0')) return { v: 0, unknown: true };   // fuera de los días cargados en el celu
   let v = 0;
   for (let d = a; d <= end; d = addDays(d, 1)) {
     const day = S.days[d]; if (!day) continue; const t = dayTotals(day);
@@ -1728,12 +1875,20 @@ function goalProgress(g, a, b) {
   }
   return { v };
 }
-// Máximo razonable de kilos por período (1 % del peso por semana con tope de 1.000 kcal de déficit)
-function safeKg(per) {
-  const weeks = PERIODS[per][2]; let w = curWeight(), tot = 0;
-  for (let i = 0; i < Math.round(weeks); i++) { const l = Math.min(w * 0.01, MAX_DEFICIT * 7 / KCAL_KG); tot += l; w -= l; }
-  return tot;
+// Kilos en un período: lo que te da TU meta actual (plan) y el máximo razonable (1 % del peso por semana, tope 1.000 kcal/día)
+function periodKg(per) {
+  const weeks = PERIODS[per][2], p = S.profile || {}; let w = curWeight(), wMax = w, plan = 0, max = 0;
+  const lean = p.formula === 'katch' ? leanKg() : null;
+  for (let i = 0; i < weeks; i++) {
+    const f = Math.min(1, weeks - i);   // la última semana puede ser parcial (un mes = 4,35 semanas)
+    const e = energyFor({ ...p, goal: p.goal === 'subir' ? 'subir' : 'bajar' }, w, { lean }); const l = (Math.abs(e.weekly) + (p.goal === 'subir' ? 0 : waterWeek(curWeight(), i + 1))) * f; plan += l; w += p.goal === 'subir' ? l : -l;
+    const m = (Math.min(wMax * 0.01, MAX_DEFICIT * 7 / KCAL_KG) + waterWeek(curWeight(), i + 1)) * f; max += m; wMax -= m;
+  }
+  return { plan, max };
 }
+function safeKg(per) { return periodKg(per).max; }
+// Lo que suma entrenar ~45 min por día (≈ 5 MET) sin comerse esas kcal
+function trainKg(per) { const w = curWeight(); return 5 * w * 0.75 * PERIODS[per][2] * 7 / KCAL_KG; }
 function goalsCard() {
   const goals = S.profile.goals || [];
   const rows = goals.map(g => {
@@ -1742,7 +1897,7 @@ function goalsCard() {
     const elapsed = Math.min(1, (Math.round((parseYmd(today()) - parseYmd(a)) / 864e5) + 1) / days); const left = days - Math.round(elapsed * days);
     const done = pr.v >= g.target; const status = done ? ['good', '¡Cumplido! 🎉'] : pct >= elapsed - 0.1 ? ['good', 'Vas bien'] : ['bad', 'Vas atrasado'];
     // historial: los 4 períodos anteriores
-    const hist = []; let pa = a; for (let i = 0; i < 4; i++) { pa = prevPeriodStart(g.period, pa); const pb = periodRange(g.period, pa)[1]; if (pb < (g.created || '0')) break; hist.unshift(goalProgress(g, pa, pb).v >= g.target ? '✅' : '❌'); }
+    const hist = []; let pa = a; for (let i = 0; i < 4; i++) { pa = prevPeriodStart(g.period, pa); const pb = periodRange(g.period, pa)[1]; if (pb < (g.created || '0')) break; const gp = goalProgress(g, pa, pb); hist.unshift(gp.unknown ? '·' : gp.v >= g.target ? '✅' : '❌'); }
     return `<div class="item tap" onclick="goalForm('${g.id}')" style="display:block">
       <div class="row between"><div class="t">${gt.icon} ${gt.t}: ${fmt1(g.target)} ${gt.u} por ${PERIODS[g.period][0].toLowerCase()}</div><span class="pill ${status[0]}">${status[1]}</span></div>
       <div class="bar" style="margin:7px 0 4px"><i style="width:${pct * 100}%;background:${done ? 'var(--good)' : 'var(--brand)'}"></i></div>
@@ -1772,10 +1927,16 @@ function gfHint() {
   const daysIn = { week: 7, month: 30, quarter: 91, year: 365 }[g.period];
   let h = '';
   if (g.type === 'kg') {
-    const safe = safeKg(g.period);
-    h = `Con tu peso actual, lo que se puede bajar de grasa en un ${per[0].toLowerCase()} es hasta <b>≈ ${fmt1(safe)} kg</b> (1 % del peso por semana).`;
-    if (g.period === 'week' || g.period === 'month') h += ' La primera semana la balanza suele marcar 1-3 kg extra de agua.';
-    if (v && v > safe * 1.15) h += `<br><br>⚠️ <b>${fmt1(v)} kg es más de lo que el cuerpo puede quemar en ese tiempo.</b> Lo podés guardar igual, pero tu meta de calorías no cambia (el tope de déficit sigue en ${fmtK(MAX_DEFICIT)} kcal por día), así que lo más probable es que no se cumpla y te frustres. Te conviene un número más cerca de ${fmt1(safe)} kg.`;
+    const { plan, max } = periodKg(g.period); const pr = S.profile.goal === 'bajar';
+    const tr = trainKg(g.period);
+    h = pr ? `Con tu meta de calorías, en un ${per[0].toLowerCase()} te da <b>≈ ${fmt1(plan)} kg</b>${planWeeksIn() < 2 ? ' (contando el agua que se va las primeras semanas)' : ''}. Si además entrenás ~45 min por día sin comerte esas kcal, sumás ≈ ${fmt1(tr)} kg más.`
+      : `Tu objetivo en el perfil no es bajar: para que se cumpla, cambialo a "Bajar grasa" en Perfil.`;
+    if (pr && v && v > plan + tr + 0.3) h += `<br><br>🔥 <b>Meta ambiciosa.</b> Se puede ir por ella: comé tu meta, entrená, dormí bien y no te comas las kcal del ejercicio (en Perfil, "kcal de ejercicio que suman" → Ninguna). Si un ${per[0].toLowerCase()} no llegás, igual es un montón de progreso.`;
+    else if (pr && v && v > plan + 0.3) h += `<br><br>💪 Para llegar a ${fmt1(v)} kg, sumá entrenamiento y no te comas esas kcal: con eso te da.`;
+    else if (pr && v) h += '<br><br>✅ Con tu plan llegás. ¡Dale!';
+  } else if (g.type === 'kgup') {
+    const { plan } = periodKg(g.period);
+    h = S.profile.goal === 'subir' ? `Con tu meta de calorías de hoy, en un ${per[0].toLowerCase()} subís <b>≈ ${fmt1(plan)} kg</b>. Para que sea músculo y no grasa: entrená fuerza y andá lento.` : 'Tu objetivo en el perfil no es subir: para que esto se cumpla, cambialo a "Ganar músculo" en Perfil.';
   } else if (g.type === 'min') h = `La OMS recomienda 150-300 min por semana. Para un ${per[0].toLowerCase()} serían ${fmtK(150 * daysIn / 7)}-${fmtK(300 * daysIn / 7)} min.`;
   else if (g.type === 'sessions') h = `Por ejemplo: 3 o 4 entrenamientos por semana son ${r0(3.5 * daysIn / 7)} en un ${per[0].toLowerCase()}.`;
   else h = `Un ${per[0].toLowerCase()} tiene ${daysIn} días. Empezar con ${r0(daysIn * 0.7)} ya es muy bueno.`;
@@ -1852,7 +2013,10 @@ function renderPareja() {
     maybeTour('pareja0');
     return;
   }
-  const p = S.pShared; const ws = weekStats(); const me = { name: S.profile.name, weekMin: ws.min, weekLogged: ws.logged, weekGoal: ws.goal, streak: streakFrom(myLoggedDates()) };
+  let p = S.pShared; const ws = weekStats();
+  // Si la otra persona todavía no abrió la app esta semana, sus números de semana arrancan en 0 (no los de la semana pasada)
+  if (p && p.week !== ws.ws) p = { ...p, weekMin: p.weekMin != null ? 0 : null, weekLogged: p.weekLogged != null ? 0 : null, weekGoal: p.weekGoal != null ? 0 : null };
+  if (p && p.logged30) p = { ...p, streak: streakFrom(p.logged30) }; const me = { name: S.profile.name, weekMin: ws.min, weekLogged: ws.logged, weekGoal: ws.goal, streak: streakFrom(myLoggedDates()) };
   const both = new Set(myLoggedDates()); const pl = new Set(p?.logged30 || []);
   let cs = 0, d = today(); if (!(both.has(d) && pl.has(d))) d = addDays(d, -1); while (both.has(d) && pl.has(d)) { cs++; d = addDays(d, -1); }
   const ch = S.couple.challenge && S.couple.challenge.week === ws.ws ? S.couple.challenge : null;
@@ -1887,7 +2051,8 @@ ${privacyToggles()}</div>
 }
 function privacyToggles() {
   const sh = S.profile.share || {};
-  const tg = (k, t) => `<div class="row between" style="padding:8px 0;border-top:1px solid var(--line)"><span>${t}</span><label class="switch" style="margin:0"><input type="checkbox" ${sh[k] ? 'checked' : ''} onchange="setShare('${k}',this.checked)"><i></i></label></div>`;
+  const on = k => ['kcal', 'streak', 'activity', 'progress'].includes(k) ? sh[k] !== false : !!sh[k];   // igual que publishShared
+  const tg = (k, t) => `<div class="row between" style="padding:8px 0;border-top:1px solid var(--line)"><span>${t}</span><label class="switch" style="margin:0"><input type="checkbox" ${on(k) ? 'checked' : ''} onchange="setShare('${k}',this.checked)"><i></i></label></div>`;
   return `<div class="mt">${tg('kcal', 'Calorías del día y días en meta')}${tg('streak', 'Racha y qué días cargué comida')}${tg('activity', 'Minutos de actividad')}${tg('progress', '% de cambio de peso')}${tg('weight', 'Peso en kg')}${tg('body', '% de grasa')}</div>
     <small class="muted">Las fotos y el detalle de lo que comés nunca se comparten.</small>`;
 }
@@ -1936,20 +2101,13 @@ function renderMas() {
   <div class="card" data-t="mas-meta"><h3>🎯 Tu meta diaria</h3>
     <div class="row between mt"><div><div class="big num">${fmtK(t.kcal)}</div><small>kcal por día + lo que quemes entrenando</small></div>
     <div style="text-align:right"><small>P <b>${t.p} g</b> · C <b>${t.c} g</b> · G <b>${t.f} g</b></small><br><small>Agua: <b>${fmtK(t.water)} ml</b></small></div></div>
-    <div class="src mt"><b>Cómo lo calculo</b><table>
-      <tr><td>Metabolismo basal (${t.formula})</td><td>${fmtK(t.bmr)}</td></tr>
-      <tr><td>× nivel de actividad diaria (${t.act.toFixed(2).replace('.', ',')})</td><td>${fmtK(t.tdee)}</td></tr>
-      <tr><td>${p.goal === 'bajar' ? 'Déficit' : p.goal === 'subir' ? 'Superávit' : 'Ajuste'} por objetivo</td><td>${t.adj > 0 ? '+' : ''}${fmtK(t.adj)}</td></tr>
-      ${p.goal !== 'mantener' ? `<tr><td>Cambio esperado</td><td>${t.weekly > 0 ? '+' : ''}${fmt1(t.weekly)} kg/semana</td></tr>` : ''}
-      ${t.capped ? `<tr><td colspan="2">Tu ritmo pedía más, pero el déficit tiene un tope de ${fmtK(MAX_DEFICIT)} kcal por día. Bajar más rápido que esto hace perder músculo y es difícil de sostener: si querés ir más rápido, hacelo con un médico.</td></tr>` : ''}
-      ${t.floored ? `<tr><td colspan="2">⚠️ La meta quedó en el piso de seguridad (${fmtK(t.floor)} kcal).</td></tr>` : ''}
-      ${t.manual ? `<tr><td colspan="2">Estás usando una meta manual.${t.kcal < t.floor ? ' ⚠️ Está por debajo del piso recomendado (' + fmtK(t.floor) + ' kcal).' : ''}</td></tr>` : ''}
-    </table></div>
+    <div class="src mt" data-t="mas-plan"><div>${planLine(t, p.goal)}</div>${planWarn(t, p.goal) ? `<div class="mt">${planWarn(t, p.goal)}</div>` : ''}
+      <button class="btn block mt" onclick="openPlan()">¿De dónde sale este número?</button></div>
     ${goalCard()}</div>
   <div class="card" data-t="mas-datos"><h3>👤 Tus datos</h3><div class="mt">${profileForm(p)}</div>
-    <div class="grid2 mt"><div><label>Fórmula</label><select id="pf-formula"><option value="mifflin">Mifflin-St Jeor (recomendada)</option><option value="katch" ${p.formula === 'katch' ? 'selected' : ''}>Katch-McArdle (usa % grasa)</option></select></div>
-    <div><label>kcal de ejercicio que suman</label><select id="pf-ex">${[[100, 'Todas (100 %)'], [75, '75 %'], [50, 'La mitad (50 %)'], [0, 'Ninguna']].map(([v, tx]) => `<option value="${v}" ${(p.exPct ?? 100) == v ? 'selected' : ''}>${tx}</option>`).join('')}</select></div></div>
-    <div class="mt"><label>Meta manual de kcal (dejalo vacío para usar la calculada)</label><input id="pf-man" inputmode="numeric" value="${p.manualKcal || ''}"></div>
+    <div class="grid2 mt"><div><label>Fórmula</label><select id="pf-formula" onchange="refreshPace()"><option value="mifflin">Mifflin-St Jeor (recomendada)</option><option value="katch" ${p.formula === 'katch' ? 'selected' : ''}>Katch-McArdle (usa % grasa)</option></select></div>
+    <div><label>kcal de ejercicio que suman</label><select id="pf-ex" onchange="refreshPace()">${[[100, 'Todas (100 %)'], [75, '75 %'], [50, 'La mitad (50 %)'], [0, 'Ninguna']].map(([v, tx]) => `<option value="${v}" ${(p.exPct ?? 100) == v ? 'selected' : ''}>${tx}</option>`).join('')}</select></div></div>
+    <div class="mt"><label>Meta manual de kcal (dejalo vacío para usar la calculada)</label><input id="pf-man" inputmode="numeric" value="${p.manualKcal || ''}" oninput="refreshPace()"></div>
     <button class="btn primary block mt" onclick="saveProfileForm()">Guardar</button></div>
   ${DEMO ? '' : `<div class="card" data-t="mas-priv"><h3>🔒 Qué ve tu pareja de vos</h3>${privacyToggles()}</div>`}
   ${DEMO ? '' : inviteCard()}
@@ -1962,8 +2120,8 @@ function renderMas() {
 function goalCard() {
   const p = S.profile; if (p.goal !== 'bajar' || !p.goalW) return '';
   const pr = projection(p.goalW); if (!pr) return '';
-  if (pr.stuck) return `<div class="nudge mt">Con esta meta no llegás a ${fmt1(p.goalW)} kg. Revisá la meta manual o el ritmo.</div>`;
-  const start = (S.body.find(b => b.w != null) || {}).w || curWeight(); const done = Math.max(0, Math.min(1, (start - curWeight()) / (start - p.goalW)));
+  if (pr.stuck) return `<div class="nudge mt">${pr.reason === 'manual' ? `Con tu meta manual no llegás a ${fmt1(p.goalW)} kg: comés casi lo mismo que gastás. Bajala o borrala en Perfil.` : pr.reason === 'lowtdee' || pr.reason === 'floored' ? `Con tu gasto de hoy, la comida sola no alcanza para llegar a ${fmt1(p.goalW)} kg: sumá movimiento (una caminata diaria cambia todo) o subí tu nivel de actividad si ya te movés más.` : `Con esta meta no llegás a ${fmt1(p.goalW)} kg. Revisá el ritmo.`}</div>`;
+  const start = Math.max(startWeight(), curWeight()), span = start - p.goalW; const done = span > 0.1 ? Math.max(0, Math.min(1, (start - curWeight()) / span)) : 0;
   return `<div class="src mt" data-t="goal-card"><b>🎯 Camino a ${fmt1(p.goalW)} kg</b>
     <div class="bar mt" style="margin:8px 0 4px"><i style="width:${done * 100}%;background:var(--good)"></i></div>
     <small>Empezaste en ${fmt1(start)} kg · hoy ${fmt1(curWeight())} kg · faltan ${fmt1(curWeight() - p.goalW)} kg</small>
@@ -1995,6 +2153,10 @@ async function saveProfileForm() {
   try {
     const { o, w } = readProfileForm();
     o.formula = $('#pf-formula').value; o.exPct = parseInt($('#pf-ex').value); o.manualKcal = num($('#pf-man').value) || null;
+    if (o.manualKcal && (o.manualKcal < 800 || o.manualKcal > 6000)) return toast('La meta manual tiene que estar entre 800 y 6.000 kcal');
+    if (o.goalW && (o.goalW !== S.profile.goalW || !S.profile.goalStartW)) o.goalStartW = w;   // desde acá se mide el camino a la meta
+    if (!o.goalW) o.goalStartW = null;
+    if (o.goal === 'bajar' && (S.profile.goal !== 'bajar' || !S.profile.planStart)) o.planStart = S.profile.goal === 'bajar' ? ((S.body.find(b => b.w != null) || {}).date || today()) : today();
     if (o.formula === 'katch' && !lastBody('fat')) { toast('Katch-McArdle necesita un % de grasa cargado. Uso Mifflin.'); o.formula = 'mifflin'; }
     await Store.saveProfile(o); S.profile = { ...S.profile, ...o };
     const lw = lastBody('w'); if (!lw || Math.abs(lw.w - w) > 0.05) { const e = { id: rid(), date: today(), w }; const same = S.body.find(b => b.date === today()); if (same) { same.w = w; await Store.saveBody(same); } else { S.body.push(e); await Store.saveBody(e); } }
@@ -2044,6 +2206,7 @@ const TOURS = {
     ['[data-t=ring]', '🦫 Tu presupuesto del día', 'El número grande es lo que te queda por comer hoy. Si se pone rojo, te pasaste.'],
     ['[data-t=eq]', 'La cuenta', 'Tu meta, más lo que quemaste entrenando, menos lo que comiste, da lo que te queda.'],
     ['[data-t=macros]', 'Proteína, carbos y grasas', 'La barra que más importa es la de proteína: tratá de llenarla todos los días.'],
+    ['[data-t=balance]', 'Tu déficit del día', 'Acá ves cuánto gastás, cuánto comiste y el déficit que hacés (lo que te hace bajar). Tocalo y te explico de dónde sale tu meta, con tus números.'],
     ['[data-t=datenav]', 'Cambiar de día', 'Con las flechitas vas a ayer o a otro día, por si te olvidaste de cargar algo.'],
     ['[data-t=add-desayuno]', 'Cargar lo que comiste', 'Tocá "＋ Agregar" en la comida que corresponda: desayuno, almuerzo, merienda, cena o picoteo.'],
     ['[data-t=entry]', 'Editar o borrar', 'Tocá cualquier cosa que ya cargaste para cambiar la cantidad o borrarla.'],
