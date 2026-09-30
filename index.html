@@ -664,8 +664,8 @@ function planLine(e, goal) {
 // Avisos cuando algo limita el ritmo (en palabras simples)
 function planWarn(e, goal) {
   if (e.reason === 'capped') return `Con la comida hacés el déficit máximo (${fmtK(MAX_DEFICIT)} kcal por día, así no perdés músculo). Para ir más rápido, el acelerador es el entrenamiento: lo que quemás y no te comés, suma directo.`;
-  if (e.reason === 'floored') return `Tu meta quedó en ${fmtK(e.sexFloor)} kcal, el mínimo para comer bien. El resto del déficit lo hace el entrenamiento: las primeras ${fmtK(e.gap)} kcal que quemás van directo a bajar.`;
-  if (e.reason === 'lowtdee') return `Tu cuerpo gasta poco en un día quieto (≈ ${fmtK(e.tdee)} kcal), menos que el mínimo para comer bien (${fmtK(e.sexFloor)}). Tu motor para bajar es moverte: cada caminata cuenta, y las primeras ${fmtK(e.gap)} kcal que quemás van directo a bajar.`;
+  if (e.reason === 'floored') return `Tu meta quedó en ${fmtK(e.sexFloor)} kcal, el mínimo para comer bien. Para bajar más rápido, el acelerador es entrenar y no comerte todo lo que quemás (en Perfil → "kcal de ejercicio que suman" → La mitad).`;
+  if (e.reason === 'lowtdee') return `Tu cuerpo gasta poco en un día quieto (≈ ${fmtK(e.tdee)} kcal), menos que el mínimo para comer bien (${fmtK(e.sexFloor)}). Tu motor para bajar es moverte: cada caminata cuenta, y te conviene no comerte lo que quemás (en Perfil → "kcal de ejercicio que suman" → La mitad o Ninguna).`;
   if (e.reason === 'manual' && goal === 'bajar' && e.kcal < e.sexFloor) return `⚠️ Tu meta manual está por debajo del mínimo recomendado (${fmtK(e.sexFloor)} kcal). Hacelo solo con un médico o nutricionista.`;
   if (e.reason === 'manual' && goal === 'bajar' && e.adj >= 0) return 'Con tu meta manual comés lo mismo o más de lo que gastás: así no vas a bajar.';
   return '';
@@ -701,14 +701,14 @@ function openPlan() {
   const lines = [
     step(1, `Tu cuerpo en reposo: ${fmtK(t.bmr)} kcal`, `Lo que gastás aunque estés todo el día quieto/a: respirar, el corazón, la temperatura. Sale de tu peso (${fmt1(t.w)} kg), altura, edad y sexo${t.formula === 'Katch-McArdle' ? ', usando tu masa magra (Katch-McArdle)' : ' (fórmula Mifflin-St Jeor)'}.`),
     step(2, `Tu día normal: × ${t.act.toFixed(3).replace(/0+$/, '').replace('.', ',')} = ${fmtK(t.tdee)} kcal`, `Le sumamos tu movimiento de todos los días (${esc(lvl.t || 'tu nivel')}), <b>sin</b> los entrenamientos: esos los cargás aparte y se suman solos.`),
-    goal === 'bajar' && t.reason === 'lowtdee' ? step(3, 'Tu déficit: lo hace moverte', `Tu cuerpo gasta ≈ ${fmtK(t.tdee)} kcal en un día normal, y no conviene comer menos de ${fmtK(t.sexFloor)}. Así que el déficit sale del movimiento: cada caminata o entrenamiento que cargás va directo a bajar (las primeras ${fmtK(t.gap)} kcal no se suman para comer).`)
+    goal === 'bajar' && t.reason === 'lowtdee' ? step(3, 'Tu déficit: lo hace moverte', `Tu cuerpo gasta ≈ ${fmtK(t.tdee)} kcal en un día normal, y no conviene comer menos de ${fmtK(t.sexFloor)}. Así que el déficit sale del movimiento: cada caminata o entrenamiento que cargás y no te comés va directo a bajar.`)
       : goal === 'bajar' && t.reason !== 'manual' ? step(3, `Tu déficit: −${fmtK(-t.adj)} kcal por día`, `Para bajar grasa hay que comer menos de lo que gastás. 1 kg de grasa son unas 7.700 kcal. Tu ritmo (${String(pacePct(p)).replace('.', ',')} % de tu peso por semana) ${t.reason === 'ok' ? `pide ${fmtK(-t.adj)} kcal menos por día` : 'queda limitado (mirá el aviso de arriba)'}.`)
       : goal === 'subir' && t.reason !== 'manual' ? step(3, `Tu superávit: +${fmtK(t.adj)} kcal por día`, 'Para ganar músculo hay que comer un poco más de lo que gastás y entrenar fuerza. Poquito: si te pasás, se va a grasa.')
       : t.reason === 'manual' ? step(3, 'Meta manual', `Pusiste ${fmtK(t.kcal)} kcal a mano en Perfil. Eso da ${t.adj < 0 ? `un déficit de ${fmtK(-t.adj)}` : t.adj > 0 ? `un superávit de ${fmtK(t.adj)}` : 'cero de diferencia'} kcal por día.`)
       : step(3, 'Sin ajuste', 'Para mantener, la meta es comer lo mismo que gastás.'),
     step(4, `Tu meta: ${fmtK(t.kcal)} kcal por día`, `${t.reason === 'lowtdee' ? `El mínimo para comer bien: ${fmtK(t.kcal)}.` : `${fmtK(t.tdee)} ${t.adj < 0 ? '−' : '+'} ${fmtK(Math.abs(t.adj))} = ${fmtK(t.kcal)}.`} Es el número de "Meta" en Hoy. Con ${t.p} g de proteína, ${t.c} g de carbos y ${t.f} g de grasas.`),
     step(5, 'Si entrenás', ex === 0 ? 'Elegiste que el ejercicio no se sume: todo lo que quemás va directo al déficit (bajás más rápido).'
-      : `Lo que quemás se suma a tu meta del día (${ex === 100 ? 'todo' : `el ${ex} %`}), así no comés de menos.${t.gap ? ` Pero como tu meta quedó en el mínimo, las primeras ${fmtK(t.gap)} kcal van al déficit.` : ''} Ojo: los relojes y las máquinas suelen inflar las kcal; si no bajás, poné 50 % en Perfil.`),
+      : `Lo que quemás se suma a tu meta del día (${ex === 100 ? 'todo' : `el ${ex} %`}), así no comés de menos.${t.gap ? ' Como tu meta quedó en el mínimo, te conviene comerte solo la mitad (lo cambiás en Perfil).' : ''} Ojo: los relojes y las máquinas suelen inflar las kcal; si no bajás, poné 50 % en Perfil.`),
     goal === 'bajar' ? step(6, 'Cómo ir más rápido', `El acelerador es moverte y no comerte esas kcal: 45 min por día de caminata rápida, bici o pesas son ≈ ${fmtK(5 * t.w * 0.75)} kcal, o sea ≈ ${fmt1(5 * t.w * 0.75 * 7 / KCAL_KG)} kg más por semana. En Perfil → "kcal de ejercicio que suman" elegí "Ninguna" o "La mitad". Dormir 7-8 h y tomar agua también ayudan (con sueño y estrés el cuerpo retiene líquido).`) : '',
     step(goal === 'bajar' ? 7 : 6, 'Qué esperar', `${goal === 'bajar' ? 'Las primeras 1-2 semanas la balanza baja mucho (hasta 2-4 kg si tenés bastante para bajar): se va agua y eso también cuenta como arranque. Después se estabiliza en el ritmo de la grasa. ' : ''}La balanza sube y baja 0,5 a 1 kg de un día a otro por agua y sal: mirá la tendencia de la semana, no el día. La app recalcula sola cada vez que te pesás.`)
   ];
@@ -728,8 +728,8 @@ function dayTotals(d) {
   (d?.foods || []).forEach(e => { const x = entryTot(e); t.kcal += x.kcal; t.p += x.p; t.c += x.c; t.f += x.f; t.n++; });
   (d?.acts || []).forEach(a => { t.burn += actNet(a); t.min += a.min || 0; });
   t.exAll = t.burn * ((S.profile?.exPct ?? 100) / 100);
-  t.gapUsed = t.burn ? Math.min(t.exAll, T().gap || 0) : 0;
-  t.counted = t.exAll - t.gapUsed;
+  t.gapUsed = 0;              // el ejercicio siempre se ve y se suma (según el % que elegiste en Perfil)
+  t.counted = t.exAll;
   return t;
 }
 // Cada día guarda la meta que tenía ese día: si cambia tu peso, el historial no se reescribe.
