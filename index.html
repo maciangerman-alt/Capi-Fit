@@ -91,7 +91,7 @@ small,.muted{color:var(--muted)}
 .glass{width:26px;height:32px;border-radius:4px 4px 8px 8px;border:2px solid var(--water);opacity:.35}
 .glass.on{background:var(--water);opacity:1}
 nav#tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:6px 6px calc(6px + var(--safe-b));z-index:20}
-nav#tabs button{display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.7rem;font-weight:800;color:var(--muted);padding:4px 8px;border-radius:12px;min-width:58px}
+nav#tabs button{display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.64rem;font-weight:800;color:var(--muted);padding:4px 2px;border-radius:12px;min-width:0;flex:1}
 nav#tabs button .ic{font-size:1.35rem;line-height:1.2;filter:grayscale(1);opacity:.7}
 nav#tabs button.on{color:var(--brand)}
 nav#tabs button.on .ic{filter:none;opacity:1}
@@ -127,6 +127,34 @@ nav#tabs button.on .ic{filter:none;opacity:1}
 .pbar b{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:.85rem}
 .pstep{display:flex;gap:10px;padding:10px 0;border-top:1px dashed var(--line);font-size:.9rem}
 .pstep .muted{font-size:.85rem;margin-top:2px;line-height:1.35}
+.ronda-card{overflow:hidden}
+.ronda{position:relative;height:230px;margin:-4px -6px 0}
+.ronda .rc{position:absolute;width:92px;transform:translate(-50%,-50%) scale(var(--sc,1));text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ronda .rc .capi{animation:rbob 1.6s ease-in-out infinite}
+.ronda .rc:nth-child(2) .capi{animation-delay:.4s} .ronda .rc:nth-child(3) .capi{animation-delay:.8s} .ronda .rc:nth-child(4) .capi{animation-delay:1.2s}
+.ronda .rc small{display:block;font-weight:900;font-size:.78rem;margin-top:-4px}
+.ronda .rc.me small{color:var(--brand)}
+.ronda .rc.ghost{opacity:.5}
+.ronda .rc-b{position:absolute;top:-8px;right:4px;font-size:1.2rem;opacity:0;transition:opacity .2s}
+.ronda .rc.talk .rc-b{opacity:1;animation:rpop .5s}
+.ronda .rc.talk .capi{animation:rjump .5s ease-out 2, rbob 1.6s ease-in-out 1s infinite}
+.ronda-mid{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);font-size:1.6rem;z-index:15;opacity:.8}
+@keyframes rbob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-6px) rotate(3deg)}}
+@keyframes rjump{0%,100%{transform:translateY(0)}40%{transform:translateY(-16px)}}
+@keyframes rpop{0%{transform:scale(.3)}70%{transform:scale(1.2)}100%{transform:scale(1)}}
+.ronda-say{background:var(--card2);border-radius:14px;padding:10px 12px;min-height:48px;font-size:.95rem;line-height:1.35}
+.ronda-rep{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+@media (prefers-reduced-motion:reduce){.ronda .rc .capi{animation:none}}
+.grp-hero{display:flex;justify-content:center;align-items:flex-end;gap:2px;margin-bottom:6px}
+.podium{display:flex;justify-content:center;align-items:flex-end;gap:6px}
+.pod{width:32%;text-align:center;display:flex;flex-direction:column;align-items:center}
+.pod .capi{width:78px} .pod.p0 .capi{width:100px}
+.pod b{font-size:.85rem;margin-top:2px} .pod small{font-size:.72rem;color:var(--muted)}
+.pod-m{font-size:1.3rem;margin-top:-6px}
+.pod-b{width:100%;border-radius:10px 10px 0 0;background:var(--brand-soft);margin-top:6px}
+.pod.p0 .pod-b{height:46px;background:var(--brand)} .pod.p1 .pod-b{height:30px} .pod.p2 .pod-b{height:18px}
+.grp-row.me{background:var(--brand-soft);border-radius:12px;padding-left:8px;padding-right:8px}
+.grp-pos{min-width:26px;font-weight:900}
 .pn{flex:none;width:24px;height:24px;border-radius:50%;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center;font-weight:900;font-size:.8rem}
 .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .acts .tile.on{outline:2.5px solid var(--brand)}
@@ -250,7 +278,7 @@ const r1 = n => Math.round((+n || 0) * 10) / 10;
 // Lee números como los escribimos acá: "1.500" = mil quinientos, "72,5" = setenta y dos y medio.
 const num = v => {
   if (v === '' || v == null) return null; let s = String(v).trim().replace(/\s/g, '');
-  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');   // 1.500 · 10.000 · 1.234,5
+  if (/^-?[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');   // 1.500 · 10.000 · 1.234,5
   else if (/^-?\d{1,3}(,\d{3})+\.\d+$/.test(s)) s = s.replace(/,/g, '');                       // 1,234.5
   else s = s.replace(',', '.');
   const n = parseFloat(s); return isFinite(n) ? n : null;
@@ -277,6 +305,9 @@ const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = se
 FOODS.forEach(f => { f._s = norm(f.n + ' ' + (f.a || '')); });
 // Link de invitación: ?inv=CODIGO → se guarda y se limpia de la barra de direcciones
 (() => { try { const q = new URLSearchParams(location.search); const c = q.get('inv'); if (c) { localStorage.setItem('capifit_inv', c.trim().toUpperCase()); q.delete('inv'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); } } catch (e) { } })();
+(() => { try { const q = new URLSearchParams(location.search); const c = q.get('grupo'); if (c) { localStorage.setItem('capifit_grp', c.trim().toUpperCase()); q.delete('grupo'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); } } catch (e) { } })();
+function storedGroupCode() { try { return localStorage.getItem('capifit_grp') || ''; } catch (e) { return ''; } }
+function clearGroupCode() { try { localStorage.removeItem('capifit_grp'); } catch (e) { } }
 function storedInvite() { try { return localStorage.getItem('capifit_inv') || ''; } catch (e) { return ''; } }
 const FOOD_BY_ID = Object.fromEntries(FOODS.map(f => [f.id, f]));
 // Alimentos que cambiaron de nombre entre versiones (para que los recientes no muestren nombres viejos)
@@ -372,7 +403,22 @@ const Local = {
   },
   async deletePhoto(id) { localStorage.removeItem(this.pk + id); },
   async saveShared() { },
+  // Grupo en modo demo: vive en este navegador (sirve para probar la pantalla)
+  _g() { this.d.groups = this.d.groups || {}; this.d.gcodes = this.d.gcodes || {}; return this.d.groups; },
+  _gl: [], _emit(k) { this._gl.forEach(x => { if (x.k === k) try { x.f(); } catch (e) { } }); },
+  _on(k, f) { const x = { k, f }; this._gl.push(x); f(); return () => { this._gl = this._gl.filter(y => y !== x); }; },
+  async createGroup(name) { const gid = 'g' + rid(), code = genCode(); this._g()[gid] = { name, owner: this.uid, members: [this.uid], code, created: Date.now(), stats: {}, cheers: [] }; this.d.gcodes[code] = { gid, name, owner: this.uid }; this.persist(); return { gid, code }; },
+  async findGroup(code) { this._g(); return this.d.gcodes[code] || null; },
+  async joinGroup(gid) { const g = this._g()[gid]; if (!g) throw new Error('Ese grupo ya no existe'); if (!g.members.includes(this.uid)) g.members.push(this.uid); this.persist(); this._emit('group'); },
+  async leaveGroup(gid) { const g = this._g()[gid]; if (g) { delete this.d.groups[gid]; delete this.d.gcodes[g.code]; } this.persist(); },
+  listenGroup(gid, cb) { return this._on('group', () => { const g = this._g()[gid]; cb(g ? { name: g.name, owner: g.owner, members: g.members, code: g.code } : null); }); },
+  listenGroupStats(gid, cb) { return this._on('stats', () => cb(Object.values(this._g()[gid]?.stats || {}))); },
+  async saveGroupStats(gid, o) { const g = this._g()[gid]; if (!g) return; fsCheck(clean(o)); g.stats[this.uid] = clean(o); this.persist(); this._emit('stats'); },
+  async deleteGroupStats() { },
+  async addGroupCheer(gid, c) { const g = this._g()[gid]; if (!g) return; g.cheers.unshift(clean(c)); g.cheers = g.cheers.slice(0, 25); this.persist(); this._emit('cheers'); },
+  listenGroupCheers(gid, cb) { return this._on('cheers', () => cb((this._g()[gid]?.cheers || []).slice(0, 25))); },
 };
+function genCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 6; i++) c += A[Math.floor(Math.random() * A.length)]; return c; }
 
 // Firestore no acepta listas dentro de listas (ej. porciones [["1 taza", 250]]): se guardan como {_a:[…]} y se vuelven a armar al leer.
 function fsEnc(v) {
@@ -458,7 +504,33 @@ const FB = {
   saveCouple(cid, o) { return this.couple(cid).set(fsEnc(clean(o)), { merge: true }); },
   listenCouple(cid, cb) { return this.couple(cid).onSnapshot(s => cb(s.exists ? s.data() : {}), () => cb({})); },
   addCheer(cid, c) { return this.couple(cid).collection('cheers').add(clean(c)); },
-  listenCheers(cid, cb) { return this.couple(cid).collection('cheers').orderBy('ts', 'desc').limit(20).onSnapshot(q => cb(q.docs.map(d => d.data())), () => cb([])); }
+  listenCheers(cid, cb) { return this.couple(cid).collection('cheers').orderBy('ts', 'desc').limit(20).onSnapshot(q => cb(q.docs.map(d => d.data())), () => cb([])); },
+  // ---- Grupo: groups/{gid} (nombre, dueño, miembros) + groupCodes/{código} → gid + stats/{uid} y cheers
+  grp(gid) { return this.db.collection('groups').doc(gid); },
+  async createGroup(name) {
+    const gid = this.db.collection('groups').doc().id; let code = genCode();
+    for (let i = 0; i < 5; i++) { const ex = await this.db.collection('groupCodes').doc(code).get(); if (!ex.exists) break; code = genCode(); }
+    await this.grp(gid).set({ name, owner: this.uid, members: [this.uid], code, created: Date.now() });
+    await this.db.collection('groupCodes').doc(code).set({ gid, name, owner: this.uid });
+    return { gid, code };
+  },
+  async findGroup(code) { const s = await this.db.collection('groupCodes').doc(code).get(); return s.exists ? s.data() : null; },
+  joinGroup(gid) { return this.grp(gid).update({ members: firebase.firestore.FieldValue.arrayUnion(this.uid) }); },
+  async leaveGroup(gid, g) {
+    await this.grp(gid).collection('stats').doc(this.uid).delete().catch(() => { });
+    const rest = (g?.members || []).filter(u => u !== this.uid);
+    if (g && g.owner === this.uid) {
+      if (!rest.length) { await this.db.collection('groupCodes').doc(g.code).delete().catch(() => { }); await this.grp(gid).delete(); return; }
+      await this.grp(gid).update({ members: rest, owner: rest[0] }); return;
+    }
+    await this.grp(gid).update({ members: firebase.firestore.FieldValue.arrayRemove(this.uid) });
+  },
+  // Ojo: con el celu sin señal, la copia local puede decir "no existe" aunque exista: eso se ignora
+  listenGroup(gid, cb, err) { return this.grp(gid).onSnapshot(s => { if (!s.exists && s.metadata.fromCache) return; cb(s.exists ? s.data() : null); }, err); },
+  listenGroupStats(gid, cb) { return this.grp(gid).collection('stats').onSnapshot(q => cb(q.docs.map(d => d.data())), () => cb([])); },
+  saveGroupStats(gid, o) { return this.grp(gid).collection('stats').doc(this.uid).set(clean(o)); },
+  addGroupCheer(gid, c) { return this.grp(gid).collection('cheers').add(clean(c)); },
+  listenGroupCheers(gid, cb) { return this.grp(gid).collection('cheers').orderBy('ts', 'desc').limit(25).onSnapshot(q => cb(q.docs.map(d => d.data())), () => cb([])); }
 };
 const Store = DEMO ? Local : FB;
 
@@ -582,7 +654,8 @@ function kgWeekTxt(kg) { return `${kg > 0 ? '+' : kg < 0 ? '−' : ''}${fmt1(Mat
 // Una línea: cuánto gastás, cuánto comés y qué te deja eso
 function planLine(e, goal) {
   if (e.reason === 'manual') return `Meta manual: ${fmtK(e.kcal)} kcal · gastás ≈ ${fmtK(e.tdee)} → ${e.adj < 0 ? `déficit de ${fmtK(-e.adj)}` : e.adj > 0 ? `superávit de ${fmtK(e.adj)}` : 'sin déficit'} kcal/día (${kgWeekTxt(e.weekly)})`;
-  if (goal === 'bajar') return `Gastás ≈ ${fmtK(e.tdee)} kcal por día y tu meta es ${fmtK(e.kcal)}: <b>déficit de ${fmtK(Math.max(0, -e.adj))} kcal por día</b> ≈ ${kgWeekTxt(e.weekly)}`;
+  if (goal === 'bajar' && e.adj > -20) return `Gastás ≈ ${fmtK(e.tdee)} kcal por día y tu meta es ${fmtK(e.kcal)} (el mínimo para comer bien): <b>tu déficit lo hace el movimiento</b>`;
+  if (goal === 'bajar') return `Gastás ≈ ${fmtK(e.tdee)} kcal por día y tu meta es ${fmtK(e.kcal)}: <b>déficit de ${fmtK(-e.adj)} kcal por día</b> ≈ ${kgWeekTxt(e.weekly)}`;
   if (goal === 'subir') return `Gastás ≈ ${fmtK(e.tdee)} kcal por día y tu meta es ${fmtK(e.kcal)}: <b>superávit de ${fmtK(e.adj)} kcal por día</b> ≈ ${kgWeekTxt(e.weekly)}`;
   return `Gastás ≈ ${fmtK(e.tdee)} kcal por día y tu meta es comer eso mismo: <b>ni déficit ni superávit</b>`;
 }
@@ -611,7 +684,7 @@ function balanceStrip() {
     <div class="bal-row"><span>Comiste</span><b class="num">${fmtK(b.eat)}</b></div>
     <div class="bal-row tot"><span>${isToday ? 'Si cerrás el día así' : 'Resultado del día'}</span><b class="num" style="color:${def ? 'var(--good)' : 'var(--bad)'}">${def ? 'déficit' : 'superávit'} ${fmtK(Math.abs(b.bal))} kcal</b></div>
     <small class="muted">${def ? `≈ ${fmtK(g)} g de grasa ${goal === 'subir' ? 'gastada (para subir te conviene comer más)' : 'menos'}` : `≈ ${fmtK(g)} g ${goal === 'subir' ? 'para construir 💪' : 'de más'}`}${wk.n ? ` · Esta semana (${wk.n} ${wk.n === 1 ? 'día cerrado' : 'días cerrados'}): ${wk.bal >= 0 ? 'déficit' : 'superávit'} ${fmtK(Math.abs(wk.bal))} kcal ≈ ${fmt1(Math.abs(wk.bal) / KCAL_KG)} kg` : ''}</small>
-    <div class="bal-more">Tu plan: ${goal === 'bajar' ? `déficit de ${fmtK(Math.max(0, -t.adj))} kcal/día` : goal === 'subir' ? `superávit de ${fmtK(Math.max(0, t.adj))} kcal/día` : 'comer lo que gastás'} · ¿Cómo se calcula? ›</div></div>`;
+    <div class="bal-more">Tu plan: ${goal === 'bajar' ? (t.adj > -20 ? 'el déficit lo hace moverte' : `déficit de ${fmtK(-t.adj)} kcal/día`) : goal === 'subir' ? `superávit de ${fmtK(Math.max(0, t.adj))} kcal/día` : 'comer lo que gastás'} · ¿Cómo se calcula? ›</div></div>`;
 }
 // La explicación completa, con tus números
 function openPlan() {
@@ -620,17 +693,18 @@ function openPlan() {
   const bars = `<div class="plan-bars">
     <div class="pb"><small>Gastás por día</small><div class="pbar"><i style="width:${bw(t.tdee)}%;background:var(--brand)"></i><b class="num">${fmtK(t.tdee)}</b></div></div>
     <div class="pb"><small>Tu meta para comer</small><div class="pbar"><i style="width:${bw(t.kcal)}%;background:var(--good)"></i><b class="num">${fmtK(t.kcal)}</b></div></div>
-    <div class="center mt"><b style="font-size:1.1rem">${t.adj < -5 ? `Déficit: ${fmtK(-t.adj)} kcal por día` : t.adj > 5 ? `Superávit: ${fmtK(t.adj)} kcal por día` : 'Comés lo que gastás'}</b><br><small class="muted">${goal === 'bajar' && t.weekly < -0.05 ? scaleTxt(t, t.w) : Math.abs(t.weekly) >= 0.05 ? `≈ ${kgWeekTxt(t.weekly)} · ≈ ${fmt1(Math.abs(t.weekly) * 4.35)} kg por mes` : 'tu peso se mantiene'}</small></div></div>`;
+    <div class="center mt"><b style="font-size:1.1rem">${t.adj < -5 ? `Déficit: ${fmtK(-t.adj)} kcal por día` : goal === 'bajar' ? 'Tu déficit lo hace el movimiento' : t.adj > 5 ? `Superávit: ${fmtK(t.adj)} kcal por día` : 'Comés lo que gastás'}</b><br><small class="muted">${goal === 'bajar' && t.weekly < -0.05 ? scaleTxt(t, t.w) : Math.abs(t.weekly) >= 0.05 ? `≈ ${kgWeekTxt(t.weekly)} · ≈ ${fmt1(Math.abs(t.weekly) * 4.35)} kg por mes` : 'tu peso se mantiene'}</small></div></div>`;
   const step = (n, title, body) => `<div class="pstep"><div class="pn">${n}</div><div class="grow"><b>${title}</b><div class="muted">${body}</div></div></div>`;
   const warn = planWarn(t, goal);
   const lines = [
     step(1, `Tu cuerpo en reposo: ${fmtK(t.bmr)} kcal`, `Lo que gastás aunque estés todo el día quieto/a: respirar, el corazón, la temperatura. Sale de tu peso (${fmt1(t.w)} kg), altura, edad y sexo${t.formula === 'Katch-McArdle' ? ', usando tu masa magra (Katch-McArdle)' : ' (fórmula Mifflin-St Jeor)'}.`),
     step(2, `Tu día normal: × ${t.act.toFixed(3).replace(/0+$/, '').replace('.', ',')} = ${fmtK(t.tdee)} kcal`, `Le sumamos tu movimiento de todos los días (${esc(lvl.t || 'tu nivel')}), <b>sin</b> los entrenamientos: esos los cargás aparte y se suman solos.`),
-    goal === 'bajar' && t.reason !== 'manual' ? step(3, `Tu déficit: −${fmtK(-t.adj)} kcal por día`, `Para bajar grasa hay que comer menos de lo que gastás. 1 kg de grasa son unas 7.700 kcal. Tu ritmo (${String(pacePct(p)).replace('.', ',')} % de tu peso por semana) ${t.reason === 'ok' ? `pide ${fmtK(-t.adj)} kcal menos por día` : 'queda limitado (mirá el aviso de arriba)'}.`)
+    goal === 'bajar' && t.reason === 'lowtdee' ? step(3, 'Tu déficit: lo hace moverte', `Tu cuerpo gasta ≈ ${fmtK(t.tdee)} kcal en un día normal, y no conviene comer menos de ${fmtK(t.sexFloor)}. Así que el déficit sale del movimiento: cada caminata o entrenamiento que cargás va directo a bajar (las primeras ${fmtK(t.gap)} kcal no se suman para comer).`)
+      : goal === 'bajar' && t.reason !== 'manual' ? step(3, `Tu déficit: −${fmtK(-t.adj)} kcal por día`, `Para bajar grasa hay que comer menos de lo que gastás. 1 kg de grasa son unas 7.700 kcal. Tu ritmo (${String(pacePct(p)).replace('.', ',')} % de tu peso por semana) ${t.reason === 'ok' ? `pide ${fmtK(-t.adj)} kcal menos por día` : 'queda limitado (mirá el aviso de arriba)'}.`)
       : goal === 'subir' && t.reason !== 'manual' ? step(3, `Tu superávit: +${fmtK(t.adj)} kcal por día`, 'Para ganar músculo hay que comer un poco más de lo que gastás y entrenar fuerza. Poquito: si te pasás, se va a grasa.')
       : t.reason === 'manual' ? step(3, 'Meta manual', `Pusiste ${fmtK(t.kcal)} kcal a mano en Perfil. Eso da ${t.adj < 0 ? `un déficit de ${fmtK(-t.adj)}` : t.adj > 0 ? `un superávit de ${fmtK(t.adj)}` : 'cero de diferencia'} kcal por día.`)
       : step(3, 'Sin ajuste', 'Para mantener, la meta es comer lo mismo que gastás.'),
-    step(4, `Tu meta: ${fmtK(t.kcal)} kcal por día`, `${fmtK(t.tdee)} ${t.adj < 0 ? '−' : '+'} ${fmtK(Math.abs(t.adj))} = ${fmtK(t.kcal)}. Es el número de "Meta" en Hoy. Con ${t.p} g de proteína, ${t.c} g de carbos y ${t.f} g de grasas.`),
+    step(4, `Tu meta: ${fmtK(t.kcal)} kcal por día`, `${t.reason === 'lowtdee' ? `El mínimo para comer bien: ${fmtK(t.kcal)}.` : `${fmtK(t.tdee)} ${t.adj < 0 ? '−' : '+'} ${fmtK(Math.abs(t.adj))} = ${fmtK(t.kcal)}.`} Es el número de "Meta" en Hoy. Con ${t.p} g de proteína, ${t.c} g de carbos y ${t.f} g de grasas.`),
     step(5, 'Si entrenás', ex === 0 ? 'Elegiste que el ejercicio no se sume: todo lo que quemás va directo al déficit (bajás más rápido).'
       : `Lo que quemás se suma a tu meta del día (${ex === 100 ? 'todo' : `el ${ex} %`}), así no comés de menos.${t.gap ? ` Pero como tu meta quedó en el mínimo, las primeras ${fmtK(t.gap)} kcal van al déficit.` : ''} Ojo: los relojes y las máquinas suelen inflar las kcal; si no bajás, poné 50 % en Perfil.`),
     goal === 'bajar' ? step(6, 'Cómo ir más rápido', `El acelerador es moverte y no comerte esas kcal: 45 min por día de caminata rápida, bici o pesas son ≈ ${fmtK(5 * t.w * 0.75)} kcal, o sea ≈ ${fmt1(5 * t.w * 0.75 * 7 / KCAL_KG)} kg más por semana. En Perfil → "kcal de ejercicio que suman" elegí "Ninguna" o "La mitad". Dormir 7-8 h y tomar agua también ayudan (con sueño y estrés el cuerpo retiene líquido).`) : '',
@@ -704,6 +778,7 @@ async function boot() {
       refreshRecents();
       Store.myInviteCode().then(c => { S.inviteCode = S.profile.inviteCode || c || null; });
       startSocial();
+      if (storedGroupCode() && !S.profile.group) S.tab = 'grupo';
       renderTabs(); await openDate(today());
     });
   } catch (e) { console.error(e); $('#main').innerHTML = `<div class="empty">No pude iniciar: ${esc(e.message || e)}</div>`; }
@@ -851,7 +926,7 @@ function paceOptions(goal, p = {}, dom = true) {
   if (goal === 'subir') return [[0.25, 'Tranquilo'], [0.5, 'Rápido']].map(([v, t]) => { const e = energyFor(pp, w, { pace: v }); return `<option value="${v}" ${(p.pace === 0.5 ? 0.5 : 0.25) === v ? 'selected' : ''}>${t} · ~${fmt1(v)} kg por semana (+${fmtK(e.adj)} kcal/día)</option>`; }).join('');
   const cur = pacePct(p);
   // Los kilos que muestra cada opción son los REALES: ya tienen en cuenta el tope y el mínimo
-  return PACES_BAJAR.map(([v, t]) => { const e = energyFor(pp, w, { pct: v }); return `<option value="${v}" ${cur === v ? 'selected' : ''}>${t} · ${String(v).replace('.', ',')} % → ≈${fmt1(Math.max(0, -e.weekly))} kg/sem (−${fmtK(Math.max(0, -e.adj))} kcal/día)</option>`; }).join('');
+  return PACES_BAJAR.map(([v, t]) => { const e = energyFor(pp, w, { pct: v }); return `<option value="${v}" ${cur === v ? 'selected' : ''}>${t} · ${String(v).replace('.', ',')} % → ${e.reason === 'lowtdee' ? 'el déficit lo hace moverte' : `≈${fmt1(Math.max(0, -e.weekly))} kg/sem (−${fmtK(Math.max(0, -e.adj))} kcal/día)`}</option>`; }).join('');
 }
 function paceNote(goal) {
   if (goal === 'bajar') return 'El ritmo es un % de tu peso: con más kilos se baja más rápido. Los kg son de grasa; las primeras semanas la balanza baja bastante más (agua). Y todo lo que entrenes sin comértelo, suma.';
@@ -895,7 +970,7 @@ async function finishOnboarding() {
 // =====================================================================
 //  NAVEGACIÓN
 // =====================================================================
-const TABS = [['hoy', 'Hoy', '🍽️'], ['act', 'Actividad', '🏃'], ['body', 'Progreso', '📈'], ['pareja', 'Pareja', '💞'], ['mas', 'Perfil', '⚙️']];
+const TABS = [['hoy', 'Hoy', '🍽️'], ['act', 'Actividad', '🏃'], ['body', 'Progreso', '📈'], ['grupo', 'Grupo', '👥'], ['pareja', 'Pareja', '💞'], ['mas', 'Perfil', '⚙️']];
 function renderTabs() {
   const n = $('#tabs'); n.style.display = 'flex'; coachFab();
   n.innerHTML = TABS.map(([k, t, i]) => `<button class="${S.tab === k ? 'on' : ''}" onclick="go('${k}')"><span class="ic">${i}</span>${t}</button>`).join('');
@@ -903,7 +978,7 @@ function renderTabs() {
 function go(tab) { S.tab = tab; renderTabs(); render(); window.scrollTo(0, 0); }
 function render() {
   if (!S.profile) return;
-  ({ hoy: renderHoy, act: renderAct, body: renderBody, pareja: renderPareja, mas: renderMas })[S.tab]();
+  ({ hoy: renderHoy, act: renderAct, body: renderBody, grupo: renderGrupo, pareja: renderPareja, mas: renderMas })[S.tab]();
 }
 function dateNav() {
   return `<div class="datenav" data-t="datenav"><button onclick="shiftDate(-1)" aria-label="Día anterior">‹</button><div class="d">${dayLabel(S.date)}</div><button onclick="shiftDate(1)" aria-label="Día siguiente" ${S.date >= today() ? 'disabled style="opacity:.3"' : ''}>›</button></div>`;
@@ -1674,6 +1749,7 @@ function coachContext() {
   L.push(`PERFIL: ${p.name}, ${p.sex === 'M' ? 'hombre' : 'mujer'}, ${ageFrom(p.birth)} años, ${p.height} cm, peso actual ${fmt1(w)} kg (IMC ${fmt1(t.bmi)}). Objetivo: ${goalTxt}${p.goal === 'bajar' ? `, ritmo elegido ${String(pacePct(p)).replace('.', ',')} % del peso por semana (real: ${fmt1(-t.weekly)} kg/semana)` : ''}${p.goalW ? `, peso objetivo ${fmt1(p.goalW)} kg` : ''}. Nivel de actividad diaria (sin entrenar): ${(ACT_LEVELS.find(l => l.v == p.act) || {}).t || p.act}.`);
   L.push(`META DIARIA EN LA APP: ${fmtK(t.kcal)} kcal (+ lo que queme entrenando${(p.exPct ?? 100) < 100 ? `, cuenta el ${p.exPct} %` : ''}). Proteína ${t.p} g, carbohidratos ${t.c} g, grasas ${t.f} g, agua ${fmtK(t.water)} ml. Cálculo: basal ${fmtK(t.bmr)} (${t.formula}) × actividad ${t.act} = gasto ${fmtK(t.tdee)} kcal; ajuste aplicado ${t.adj > 0 ? '+' : ''}${fmtK(t.adj)} kcal/día; cambio esperado ${fmt1(t.weekly)} kg/semana.${t.manual ? ' Usa meta manual.' : ''}${planWarn(t, p.goal) ? ' Nota: ' + planWarn(t, p.goal) : ''}`);
   { const b = dayBalance(S.days[today()] || {}), wk = weekBalance(); L.push(`BALANCE: hoy gasta ≈ ${fmtK(b.spend)} kcal (día normal + entrenos) y comió ${fmtK(b.eat)} → ${b.bal >= 0 ? 'déficit' : 'superávit'} de ${fmtK(Math.abs(b.bal))} kcal hasta ahora.${wk.n ? ` Esta semana (${wk.n} días cerrados): ${wk.bal >= 0 ? 'déficit' : 'superávit'} acumulado de ${fmtK(Math.abs(wk.bal))} kcal ≈ ${fmt1(Math.abs(wk.bal) / KCAL_KG)} kg.` : ''}`); }
+  if (S.group) { const rs = groupRows('pct'), i = rs.findIndex(r => r.me); L.push(`GRUPO "${S.group.name}": ${rs.length} personas; por % bajado va ${i + 1}º (${rs.filter(r => !r.pending).map(r => `${r.me ? 'vos' : (r.name || '').split(' ')[0]} ${fmt1(r.prog)} %`).join(', ')}).`); }
   if (p.goal === 'bajar' && p.goalW) { const pr = projection(p.goalW); if (pr && !pr.stuck) L.push(`PROYECCIÓN: llega a ${fmt1(p.goalW)} kg en ~${pr.weeks} semanas (aprox. ${fmtDate(pr.date)} ${pr.date.slice(0, 4)}); en 4 semanas ~${fmt1(pr.first4)} kg, en 12 semanas ~${fmt1(pr.first12)} kg.`); }
   const bw = S.body.slice(-12).map(b => `${b.date}: ${[b.w != null ? fmt1(b.w) + ' kg' : '', b.fat != null ? fmt1(b.fat) + '% grasa' : '', b.mus != null ? fmt1(b.mus) + ' kg músculo' : '', b.waist != null ? 'cintura ' + fmt1(b.waist) + ' cm' : ''].filter(Boolean).join(', ')}`);
   L.push(`MEDICIONES (últimas ${bw.length}${start ? `, empezó en ${fmt1(start)} kg` : ''}):\n${bw.join('\n') || 'sin mediciones'}`);
@@ -1881,7 +1957,7 @@ function periodKg(per) {
   const lean = p.formula === 'katch' ? leanKg() : null;
   for (let i = 0; i < weeks; i++) {
     const f = Math.min(1, weeks - i);   // la última semana puede ser parcial (un mes = 4,35 semanas)
-    const e = energyFor({ ...p, goal: p.goal === 'subir' ? 'subir' : 'bajar' }, w, { lean }); const l = (Math.abs(e.weekly) + (p.goal === 'subir' ? 0 : waterWeek(curWeight(), i + 1))) * f; plan += l; w += p.goal === 'subir' ? l : -l;
+    const e = energyFor({ ...p, goal: p.goal === 'subir' ? 'subir' : 'bajar' }, w, { lean }); const l = (p.goal === 'subir' ? Math.max(0, e.weekly) : e.weekly < -0.01 ? -e.weekly + waterWeek(curWeight(), i + 1) : 0) * f; plan += l; w += p.goal === 'subir' ? l : -l;
     const m = (Math.min(wMax * 0.01, MAX_DEFICIT * 7 / KCAL_KG) + waterWeek(curWeight(), i + 1)) * f; max += m; wMax -= m;
   }
   return { plan, max };
@@ -1958,6 +2034,7 @@ async function delGoal(id) {
 // =====================================================================
 const coupleId = () => [S.user.uid, S.profile.partner].sort().join('_');
 function startSocial() {
+  startGroup();
   if (DEMO || !S.profile) return;
   if (S.profile.pendingCode && !S.profile.partner) watchCode(S.profile.pendingCode);
   if (S.profile.partner) {
@@ -1980,6 +2057,7 @@ function startSocial() {
 }
 function restartSocial() { S.unsub.forEach(f => { try { f(); } catch (e) { } }); S.unsub = []; startSocial(); }
 const publishShared = debounce(async () => {
+  publishGroup();
   if (DEMO || !S.profile) return;
   const sh = S.profile.share || {}; const ws = weekStats(); const t = T(); const td = S.days[today()];
   const lw = lastBody('w'), fw = S.body.find(b => b.w != null), lf = lastBody('fat');
@@ -1996,6 +2074,11 @@ const publishShared = debounce(async () => {
   if (sh.body && lf) o.fat = lf.fat;
   try { await Store.saveShared(o); } catch (e) { console.warn('shared', e); }
 }, 1200);
+// (el grupo publica aparte, también en modo demo)
+const publishGroup = debounce(async () => {
+  if (!S.profile?.group || !S.group) return;
+  try { await Store.saveGroupStats(S.profile.group, myGroupStats()); } catch (e) { console.warn('group', e); }
+}, 1500);
 function watchCode(code) {
   S.unsub.push(Store.listenPairCode(code, async d => {
     if (d && d.claimedBy && !S.profile.partner) { Store.deletePairCode(code); await setPartner(d.claimedBy, d.claimedName); }
@@ -2093,6 +2176,301 @@ async function saveChallenge() {
 }
 
 // =====================================================================
+//  GRUPO (los capigordos): ranking en porcentajes, no en kilos
+// =====================================================================
+function startGroup() {
+  (S.gUnsub || []).forEach(f => { try { f(); } catch (e) { } }); S.gUnsub = [];
+  S.group = null; S.gStats = []; S.gCheers = [];
+  const gid = S.profile?.group; if (!gid) return;
+  S.gUnsub.push(Store.listenGroup(gid, g => {
+    if (!g || !(g.members || []).includes(S.user.uid)) { S.group = null; groupGone(); return; }
+    S.group = { id: gid, ...g }; publishGroup(); if (S.tab === 'grupo' && !S._tour) render();
+  }, e => { if (e && e.code === 'permission-denied') { S.group = null; groupGone(); } }));
+  S.gUnsub.push(Store.listenGroupStats(gid, list => { S.gStats = list; if (S.tab === 'grupo' && !S._tour) render(); }));
+  let firstC = true;
+  S.gUnsub.push(Store.listenGroupCheers(gid, list => {
+    const n = list[0]; if (!firstC && n && n.from !== S.user.uid && (!S.gCheers[0] || n.ts !== S.gCheers[0].ts)) toast(`${n.emoji} ${n.name}: ${n.text}`, 3500);
+    firstC = false; S.gCheers = list; if (S.tab === 'grupo' && !S._tour) render();
+  }));
+}
+// Si el grupo se borró o te sacaron, se limpia solo
+async function groupGone() {
+  if (!S.profile?.group) return;
+  S.profile.group = null; try { await Store.saveProfile({ group: null }); } catch (e) { }
+  if (S.tab === 'grupo') render();
+}
+// Mis números para el grupo: porcentajes (los kg solo si lo elegís)
+function myGroupStats() {
+  const p = S.profile, ws = weekStats(), cur = curWeight(), lw = lastBody('w'), sh = p.share || {};
+  const joinW = p.groupJoinW || cur, dir = p.goal === 'subir' ? 1 : -1;
+  let goalPct = null;
+  if (p.goal === 'bajar' && p.goalW) { const st = Math.max(startWeight(), cur), span = st - p.goalW; goalPct = span > 0.1 ? r1(Math.max(0, Math.min(100, (st - cur) / span * 100))) : null; }
+  const w7 = weightAt(addDays(today(), -7), false);
+  const week = w7 && lw && w7.date < lw.date ? r1((lw.w - w7.w) / w7.w * 100 * dir) : null;
+  const streak = streakFrom(myLoggedDates());
+  return {
+    uid: S.user.uid, name: p.name || 'Capi', updatedAt: Date.now(), week: ws.ws, goal: p.goal || 'mantener',
+    goalPct, prog: r1((cur - joinW) / joinW * 100 * dir), weekChg: week, streak,
+    weekLogged: ws.logged, weekGoal: ws.goal, weekMin: r0(ws.min),
+    capiFat: Math.round(capiFat() * 100) / 100, capiBand: (S.days[today()]?.acts || []).length > 0, capiTang: streak >= 3,
+    weighDate: lw ? lw.date : null, kg: sh.groupKg ? cur : null, goalW: sh.groupKg && p.goalW ? p.goalW : null
+  };
+}
+const G_MODES = {
+  meta: { t: '🎯 Meta', help: 'Qué porcentaje del camino a su peso objetivo ya hizo cada uno. El que no puso peso objetivo queda abajo.' },
+  pct: { t: '⚖️ % bajado', help: 'Cuánto bajó cada uno desde que se sumó al grupo, en % de su propio peso. Es lo más justo: bajar 2 kg pesando 60 vale lo mismo que 3 kg pesando 90.' },
+  semana: { t: '🔥 Semana', help: 'Puntos de esta semana: 10 por cada día dentro de la meta de calorías, 5 por cada día que cargó comida y 1 cada 10 min de actividad (hasta 300 min).' }
+};
+function gScore(s, mode) {
+  if (mode === 'meta') return s.goalPct;
+  if (mode === 'pct') return s.prog;
+  return (s.weekGoal || 0) * 10 + (s.weekLogged || 0) * 5 + Math.min(s.weekMin || 0, 300) / 10;
+}
+function groupRows(mode) {
+  const g = S.group, ws = weekStart(today());
+  const byUid = Object.fromEntries((S.gStats || []).map(x => [x.uid, x]));
+  let rows = (g?.members || []).map(uid => {
+    let s = byUid[uid] || { uid, name: 'Capi nuevo', pending: true };
+    if (s.week !== ws && !s.pending) s = { ...s, weekLogged: 0, weekGoal: 0, weekMin: 0 };   // semana nueva: arranca en 0
+    if (uid === S.user.uid) s = { ...myGroupStats(), me: true };
+    return s;
+  });
+  rows.forEach(r => { r.score = r.pending ? null : gScore(r, mode); });
+  rows.sort((a, b) => (b.score ?? -1e9) - (a.score ?? -1e9) || (b.streak || 0) - (a.streak || 0));
+  return rows;
+}
+function gValTxt(r, mode) {
+  if (r.pending) return 'todavía no abrió la app';
+  if (mode === 'meta') return r.goalPct == null ? (r.goal === 'bajar' ? 'sin peso objetivo' : r.goal === 'subir' ? 'objetivo: subir' : 'objetivo: mantener') : `${fmt1(r.goalPct)} % del camino`;
+  if (mode === 'pct') { const up = r.goal === 'subir' ? r.prog > 0 : r.prog < 0; return Math.abs(r.prog) < 0.05 ? '0 %' : `${up ? '+' : '−'}${fmt1(Math.abs(r.prog))} %${r.goal === 'subir' ? ' (sube)' : ''}`; }
+  return `${r0(r.score)} pts`;
+}
+function gSubTxt(r, mode) {
+  if (r.pending) return '';
+  const bits = [];
+  if (mode === 'semana') bits.push(`${r.weekGoal || 0} días en meta · ${r.weekLogged || 0} cargados · ${fmtK(r.weekMin || 0)} min`);
+  else {
+    if (r.weekChg != null) bits.push(`última semana: ${r.weekChg > 0 ? '−' : r.weekChg < 0 ? '+' : ''}${fmt1(Math.abs(r.weekChg))} %`);
+    if (r.kg != null) bits.push(`${fmt1(r.kg)} kg${r.goalW ? ` → ${fmt1(r.goalW)}` : ''}`);
+  }
+  if (r.streak) bits.push(`🔥 ${r.streak}`);
+  if (!r.me && r.updatedAt) bits.push(ago(r.updatedAt));
+  return bits.join(' · ');
+}
+function renderGrupo() {
+  const main = $('#main'), g = S.group;
+  if (!S.profile.group || !g) {
+    const inv = storedGroupCode();
+    main.innerHTML = `<div class="hdr"><h1>Grupo</h1></div>
+    ${rondaCard(false)}
+    <div class="card center"><h2>Los capigordos 🦫</h2><p class="muted" style="margin-top:4px">Armá un grupo con tus amigos y compitan por quién va mejor. Se comparan <b>porcentajes</b>, no kilos: nadie ve cuánto pesás (salvo que vos quieras).</p></div>
+    ${S.profile.group && !g ? '<div class="nudge">Cargando tu grupo…</div>' : ''}
+    <div class="card" data-t="grp-join"><h3>Unirme a un grupo</h3>${inv ? '<p class="muted" style="margin:4px 0 0">¡Te invitaron! El código ya está puesto.</p>' : '<p class="muted" style="margin:4px 0 0">Pedile el código de 6 letras a quien armó el grupo.</p>'}
+      <div class="row mt"><input id="grp-code" maxlength="6" value="${esc(inv)}" placeholder="ABC123" style="text-transform:uppercase;letter-spacing:.15em;font-weight:900"><button class="btn primary" onclick="joinGroupUI()">Unirme</button></div></div>
+    <div class="card" data-t="grp-new"><h3>Armar un grupo nuevo</h3><div class="row mt"><input id="grp-name" maxlength="30" placeholder="Los capigordos"><button class="btn" onclick="createGroupUI()">Crear</button></div></div>`;
+    rondaStart(); maybeTour('grupo0'); return;
+  }
+  const mode = S.gMode || 'pct'; const rows = groupRows(mode); const me = rows.findIndex(r => r.me);
+  const top = rows.filter(r => !r.pending && r.score != null).slice(0, 3);
+  const medal = ['🥇', '🥈', '🥉'];
+  const podium = top.length ? [1, 0, 2].filter(i => top[i]).map(i => { const r = top[i]; return `<div class="pod p${i}"><div class="capi">${capiSVG(r.capiFat ?? 0.6, i === 0 ? 'party' : 'happy', { band: !!r.capiBand, tang: !!r.capiTang })}</div><div class="pod-m">${medal[i]}</div><b>${esc((r.name || '').split(' ')[0])}${r.me ? ' (vos)' : ''}</b><small>${gValTxt(r, mode)}</small><div class="pod-b"></div></div>`; }).join('') : '';
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.score || 0)));
+  const bar = r => { if (r.score == null) return 0; if (mode === 'meta') return Math.max(0, Math.min(100, r.score)); return Math.max(0, r.score) / maxAbs * 100; };
+  main.innerHTML = `<div class="hdr"><h1>${esc(g.name || 'Grupo')}</h1><span class="pill good">👥 ${g.members.length} ${g.members.length === 1 ? 'capi' : 'capis'}</span></div>
+  ${rondaCard(true)}
+  ${podium ? `<div class="card" data-t="grp-podium"><div class="podium">${podium}</div>${me >= 0 && rows.length > 1 ? `<p class="center muted" style="margin:10px 0 0">Vas <b>${me + 1}º de ${rows.length}</b>${me === 0 ? ' 👑 ¡Sostenelo!' : ' · ¡a descontar!'}</p>` : ''}</div>` : ''}
+  <div class="card" data-t="grp-rank">
+    <div class="seg" id="grp-modes">${Object.entries(G_MODES).map(([k, v]) => `<button class="${k === mode ? 'on' : ''}" onclick="S.gMode='${k}';render()">${v.t}</button>`).join('')}</div>
+    <small class="muted" style="display:block;margin:8px 0 2px">${G_MODES[mode].help}</small>
+    <div class="list">${rows.map((r, i) => `<div class="item grp-row ${r.me ? 'me' : ''}" style="display:block">
+      <div class="row between"><div class="row" style="gap:8px"><span class="grp-pos">${r.pending || r.score == null ? '·' : i < 3 ? medal[i] : (i + 1) + 'º'}</span><b>${esc(r.name || 'Capi')}${r.me ? ' (vos)' : ''}</b></div><b class="num">${gValTxt(r, mode)}</b></div>
+      <div class="bar" style="margin:6px 0 3px"><i style="width:${bar(r)}%;background:${r.me ? 'var(--brand)' : 'var(--good)'}"></i></div>
+      <small class="muted">${gSubTxt(r, mode)}</small></div>`).join('')}</div>
+    ${rows.some(r => r.pending) ? '<small class="muted">Los que "todavía no abrieron la app" aparecen cuando la abren con esta versión.</small>' : ''}
+  </div>
+  <div class="card" data-t="grp-cheers"><h3>💬 El muro</h3>
+    <div class="row wrap mt">${['👏 ¡Vamos capis!', '🔥 Qué semana', '💪 Nadie afloja', '🥗 Hoy comemos bien', '🏃 A moverse', '🦫 Capi power'].map(x => `<button class="chip" onclick="groupCheer('${x}')">${x}</button>`).join('')}<button class="chip" onclick="rondaToMuro(true)">😂 Chiste random</button></div>
+    <div class="mt">${(S.gCheers || []).map(c => `<div class="cheer"><span class="e">${esc(c.emoji)}</span><div class="grow"><b>${esc(c.name)}</b> <small class="muted">${ago(c.ts)}</small><div>${esc(c.text)}</div></div></div>`).join('') || '<div class="empty">Tirá el primero 👆</div>'}</div></div>
+  <div class="card" data-t="grp-invite"><h3>➕ Sumar gente</h3><p class="muted" style="margin:4px 0 10px">Código del grupo: <b class="num" style="letter-spacing:.15em">${esc(g.code || '')}</b></p>
+    <button class="btn primary block" onclick="shareGroup()">Compartir invitación al grupo</button></div>
+  <div class="card" data-t="grp-priv"><h3>🔒 Qué ve el grupo de vos</h3>
+    <p class="muted" style="margin:4px 0 6px">Tus porcentajes, tu racha, los días en meta y los minutos de actividad. Nunca lo que comés ni tus fotos.</p>
+    <div class="row between" style="padding:8px 0;border-top:1px solid var(--line)"><span>Mostrar también mis kg</span><label class="switch" style="margin:0"><input type="checkbox" ${S.profile.share?.groupKg ? 'checked' : ''} onchange="setShare('groupKg',this.checked)"><i></i></label></div>
+    <button class="btn ghost block mt" onclick="leaveGroupUI()">Salir del grupo</button></div>`;
+  rondaStart(); maybeTour('grupo');
+}
+// ---------- Capis en ronda: se dicen chistes entre ellos ----------
+const RONDA_NAMES = ['Germán', 'Augusto', 'Lucas', 'Martín'];
+// to: a quién va dirigido (solo sale si esa persona está en la ronda) · self: lo dice de sí mismo · {x}: otro de la ronda
+const JOKES = [
+  // los clásicos del grupo
+  { t: 'Renato Augusto, ¡bajó de peso Augusto!', to: 'augusto' },
+  { t: 'Vedat Muriqi, ¡qué flaco está el Chiqui!' },
+  { t: 'Juan Sebastián Verón, ¡cómo bajó de peso el gordo tetón!' },
+  { t: 'Diego Maradona, no pasa nada si me como una dona 🍩', self: true },
+  { t: 'Martín Karadagian, ¡qué flaco está Macián!', to: 'german' },
+  { t: 'Eduardo Vargas, ¡qué músculos que tiene Lucas Vargas! 💪', to: 'lucas' },
+  { t: 'Si me junto con Pachón, termino como un lechón 🐷', self: true },
+  { t: 'Tetas sudadas, libras bajadas 💦' },
+  { t: 'Si voy a tomar alcohol, que sea vodka con limón 🍋', self: true },
+  { t: 'Si tomo coca, que no sea la que engorda 🥤', self: true },
+  { t: 'Bajando los flotadores, me hundo en tus pezones 🛟' },
+  { t: 'Ya no soy gordito, solo relleno de amor 🥰', self: true },
+  { t: 'No estoy gordo, tengo huesos pesados 🦴', self: true },
+  { t: '¿Es {x} o Brad Pitt? ¡Están igual! 😍' },
+  { t: 'Si bajo 5 kilos me llego a ver el pito 🔍', self: true },
+  { t: 'Más ensalada, menos pajereadas 🥗', self: true },
+  { t: 'Ponete las pilas {x}, gordo tetón 🔋' },
+  // los nuevos
+  { t: 'Ángel Di María, ¡Augusto ya no se come la pizzería! 🍕', to: 'augusto' },
+  { t: 'Gonzalo Higuaín, ¡mirá lo que bajó Martín! 😱', to: 'martin' },
+  { t: 'Marcelo Gallardo, ¡Germán ya no parece un fardo!', to: 'german' },
+  { t: 'Javier Mascherano, ¡Lucas ya no parece un marrano! 🐖', to: 'lucas' },
+  { t: 'Lionel Scaloni, ¡Germán ya no se come los macarroni! 🍝', to: 'german' },
+  { t: 'Martín Palermo, ¡Martín corre como un enfermo! 🏃', to: 'martin' },
+  { t: 'Rodrigo De Paul, ¡Augusto ya no flota como un baúl! 🧳', to: 'augusto' },
+  { t: 'Carlos Tévez, ¡Lucas ya no come facturas de a diez! 🥐', to: 'lucas' },
+  { t: 'Román Riquelme, ¡Martín ya entrena y no se duerme! 😴', to: 'martin' },
+  { t: 'Burrito Ortega, ¡Augusto ya no vacía la bodega! 🍷', to: 'augusto' },
+  { t: 'Dibu Martínez, ¡Martín ya no ataja budines! 🧤', to: 'martin' },
+  { t: 'Paulo Dybala, ¡Lucas ya no ocupa toda la sala! 🛋️', to: 'lucas' },
+  { t: 'Claudio Caniggia, ¡Macián ya no se morfa la focaccia! 🍞', to: 'german' },
+  { t: 'Enzo Fernández, ¡Germán ya no pide talles tan grandes! 👖', to: 'german' },
+  { t: 'Pocho Lavezzi, ¡Augusto está más facha que Messi! 🐐', to: 'augusto' },
+  { t: 'Augusto, Augusto: ya no es gordo, es robusto 💪', to: 'augusto' },
+  { t: 'Lo vi a Augusto en malla y me pegó un susto 🩳', to: 'augusto' },
+  { t: 'Martín, Martín: pasaste de lechón a delfín 🐬', to: 'martin' },
+  { t: 'De Macián a Superman: sin harina y sin pan 🦸', to: 'german' },
+  { t: 'Menos choripán, más six pack pa’ Germán 🌭', to: 'german' },
+  { t: 'Lucas se subió a la balanza y le dijo: "de a uno, por favor" ⚖️', to: 'lucas' },
+  { t: 'La balanza de Augusto pidió licencia por estrés 😵', to: 'augusto' },
+  { t: 'Lucas no está gordo: está en modo ahorro de energía 🔋', to: 'lucas' },
+  { t: 'Martín dijo "el lunes arranco" y era un lunes de 2019 📅', to: 'martin' },
+  { t: 'Olé olé olé olá, ¡cada día más flaco está {x}! 🎶' },
+  { t: '¡El que no salta es un tetón! 🎶' },
+  { t: 'Dale campeón, dale campeón, sin harina y sin lechón 🏆' },
+  { t: 'Birra de noche, flotador de coche 🍺', self: true },
+  { t: 'Sudor de sobaco, kilo que se va al tacho 🗑️' },
+  { t: 'Si hoy hay picada, mañana cinta y ensalada 🥗', self: true },
+  { t: 'Tanto correr que ya me estoy por ver… ¡los pies! 👣', self: true }
+];
+const RONDA_REPLIES = ['¡Callate, gordo tetón! 😂', 'Mirá quién habla 🙄', 'Eso es músculo, amigo 💪', 'Envidia, pura envidia 😎', 'Te espero en el ranking 🏆', 'Jajaja no me jodas 😂', 'Anotá: el lunes arranco 🫠', 'Y vos con esa panza de embarazada 🤰', 'Hablame cuando bajes vos 👀', 'Sí, sí, reíte… después te paso 😤'];
+const rondaKey = n => { const k = norm(String(n || '').split(' ')[0]); return k === 'macian' ? 'german' : k; };
+// Quiénes están en la ronda: los del grupo (vos siempre), y si faltan, los de siempre esperando
+function rondaSeats() {
+  const seats = []; const toSeat = r => ({ name: (r.name || 'Capi').split(' ')[0], key: rondaKey(r.name), fat: r.pending ? 0.9 : (r.capiFat ?? 0.8), band: !!r.capiBand, tang: !!r.capiTang, me: !!r.me, ghost: !!r.pending, row: r });
+  if (S.group) { const rows = groupRows(S.gMode || 'pct'); const mine = rows.find(r => r.me); [mine, ...rows.filter(r => !r.me).slice(0, mine ? 3 : 4)].filter(Boolean).forEach(r => seats.push(toSeat(r))); }
+  else if (S.profile?.name) seats.push({ name: S.profile.name.split(' ')[0], key: rondaKey(S.profile.name), fat: capiFat(), me: true });
+  for (const n of RONDA_NAMES) { if (seats.length >= 4) break; if (!seats.some(s => s.key === rondaKey(n))) seats.push({ name: n, key: rondaKey(n), fat: 0.92, ghost: true }); }
+  return seats;
+}
+// Chistes que salen de los datos del grupo
+function rondaDynamic(seats) {
+  const out = []; const real = seats.filter(s => s.row && !s.row.pending);
+  if (real.length >= 2) {
+    const by = [...real].sort((a, b) => (b.row.prog || 0) - (a.row.prog || 0));
+    if ((by[0].row.prog || 0) > 0.3) out.push({ t: `¿Es ${by[0].name} o Brad Pitt? ¡Va primero y están igual! 😍`, target: by[0] });
+    out.push({ t: `Ponete las pilas ${by[by.length - 1].name}, que venís último, gordo tetón 🔋`, target: by[by.length - 1] });
+  }
+  for (const s of real) {
+    if (s.band) out.push({ t: `${s.name} entrenó hoy: tetas sudadas, libras bajadas 💦`, target: s });
+    if ((s.row.streak || 0) >= 3) out.push({ t: `${s.name} lleva ${s.row.streak} días seguidos cargando: un reloj suizo ⌚`, target: s });
+  }
+  return out;
+}
+function rondaPick(seats, sp) {
+  const speaker = seats[sp], others = seats.filter((_, i) => i !== sp); const pool = [];
+  for (const j of JOKES) {
+    if (j.to) { const tg = seats.find(s => s.key === j.to); if (tg && tg !== speaker) pool.push({ t: j.t, target: tg }); continue; }
+    if (j.self) { pool.push({ t: j.t, target: null }); continue; }
+    const tg = others[Math.floor(Math.random() * others.length)]; pool.push({ t: j.t.replace(/\{x\}/g, tg.name), target: j.t.includes('{x}') ? tg : null });
+  }
+  rondaDynamic(seats).forEach(d => { if (d.target !== speaker) pool.push(d); });
+  const recent = S.ronda.recent || []; let fresh = pool.filter(x => !recent.includes(x.t)); if (!fresh.length) fresh = pool;
+  const pick = fresh[Math.floor(Math.random() * fresh.length)];
+  S.ronda.recent = [...recent, pick.t].slice(-14); return pick;
+}
+function rondaCard(inGroup) {
+  const seats = rondaSeats(); S.ronda = S.ronda || {}; S.ronda.seats = seats;
+  const say = S.ronda.say;
+  return `<div class="card ronda-card" data-t="grp-ronda">
+    <div class="ronda" id="ronda">${seats.map((s, i) => `<div class="rc ${s.ghost ? 'ghost' : ''} ${s.me ? 'me' : ''}" data-i="${i}" onclick="rondaTalk(${i})"><div class="rc-b">💬</div><div class="capi">${capiSVG(s.fat, 'happy', { band: s.band, tang: s.tang })}</div><small>${esc(s.name)}${s.ghost && inGroup ? ' 💤' : ''}</small></div>`).join('')}<div class="ronda-mid">🥗</div></div>
+    <div class="ronda-say" id="ronda-say">${say ? rondaSayHtml(say) : '<span class="muted">Tocá un capi y te tira un chiste 😂</span>'}</div>
+    <div class="row mt" style="gap:8px"><button class="btn sm grow" onclick="rondaTalk()">🎲 Otro chiste</button>${inGroup ? '<button class="btn sm primary grow" onclick="rondaToMuro()">📣 Mandarlo al muro</button>' : ''}</div></div>`;
+}
+function rondaSayHtml(say) { return `<div><b>${esc(say.who)}:</b> ${esc(say.t)}</div>${say.reply ? `<div class="ronda-rep"><b>${esc(say.reply.who)}:</b> ${esc(say.reply.t)}</div>` : ''}`; }
+function rondaTalk(i) {
+  const seats = S.ronda?.seats; const box = $('#ronda'); if (!seats || !box) return;
+  const sp = i ?? ((S.ronda.last ?? -1) + 1 + Math.floor(Math.random() * (seats.length - 1))) % seats.length; S.ronda.last = sp;
+  const j = rondaPick(seats, sp); const say = { who: seats[sp].name, t: j.t };
+  S.ronda.say = say; clearTimeout(S.ronda.rt);
+  box.querySelectorAll('.rc').forEach(el => el.classList.toggle('talk', +el.dataset.i === sp));
+  const out = $('#ronda-say'); if (out) out.innerHTML = rondaSayHtml(say);
+  const ti = j.target ? seats.indexOf(j.target) : -1;
+  if (ti >= 0 && Math.random() < 0.6) S.ronda.rt = setTimeout(() => {
+    if (S.ronda.say !== say || !$('#ronda')) return;
+    say.reply = { who: seats[ti].name, t: RONDA_REPLIES[Math.floor(Math.random() * RONDA_REPLIES.length)] };
+    $('#ronda').querySelectorAll('.rc').forEach(el => el.classList.toggle('talk', +el.dataset.i === ti));
+    const o = $('#ronda-say'); if (o) o.innerHTML = rondaSayHtml(say);
+  }, 2300);
+}
+// La ronda gira despacito; cada tanto alguien tira un chiste
+function rondaStart() {
+  cancelAnimationFrame(S._rondaRaf); clearInterval(S._rondaTimer);
+  const t0 = S._rondaT0 || (S._rondaT0 = performance.now());
+  const loop = now => {
+    const box = $('#ronda'); if (!box) return;
+    const els = box.querySelectorAll('.rc'), n = els.length, base = (now - t0) / 40000 * 2 * Math.PI;
+    els.forEach((el, i) => { const a = base + i * 2 * Math.PI / n, sn = Math.sin(a); el.style.left = (50 + 36 * Math.cos(a)) + '%'; el.style.top = (46 + 26 * sn) + '%'; el.style.zIndex = 20 + Math.round(sn * 10); el.style.setProperty('--sc', (0.78 + 0.22 * (sn + 1) / 2).toFixed(3)); });
+    S._rondaRaf = requestAnimationFrame(loop);
+  };
+  S._rondaRaf = requestAnimationFrame(loop);
+  if (!S.ronda?.say) setTimeout(() => rondaTalk(), 900);
+  S._rondaTimer = setInterval(() => { if (!$('#ronda')) return clearInterval(S._rondaTimer); if (document.hidden || S._tour) return; rondaTalk(); }, 8000);
+}
+async function rondaToMuro(random) {
+  if (!S.profile.group) return;
+  let t = S.ronda?.say?.t;
+  if (random || !t) { const seats = S.ronda?.seats || rondaSeats(); const me = Math.max(0, seats.findIndex(s => s.me)); t = rondaPick(seats, me).t; }
+  const c = { from: S.user.uid, name: S.profile.name, emoji: '😂', text: t, ts: Date.now() };
+  try { await Store.addGroupCheer(S.profile.group, c); toast('Tirado al muro 😂'); } catch (e) { toast('No se pudo enviar'); }
+}
+
+async function createGroupUI() {
+  const name = ($('#grp-name').value || '').trim() || 'Los capigordos';
+  try { const { gid } = await Store.createGroup(name); await enterGroup(gid); toast('¡Grupo armado! Ahora invitá a los demás 🦫', 3000); }
+  catch (e) { console.error(e); toast('No pude crear el grupo: ' + (e.message || e)); }
+}
+async function joinGroupUI() {
+  const code = ($('#grp-code').value || '').trim().toUpperCase(); if (code.length !== 6) return toast('El código tiene 6 caracteres');
+  try {
+    const f = await Store.findGroup(code); if (!f) return toast('Ese código no existe. Revisalo.');
+    await Store.joinGroup(f.gid); await enterGroup(f.gid); clearGroupCode(); toast(`¡Te sumaste a ${f.name}! 🦫`, 3000);
+  } catch (e) { console.error(e); toast('No pude sumarte: ' + (e.message || e)); }
+}
+async function enterGroup(gid) {
+  const o = { group: gid, groupJoinW: curWeight(), groupJoined: today() };
+  Object.assign(S.profile, o); await Store.saveProfile(o); startGroup(); render();
+}
+async function leaveGroupUI() {
+  if (!confirm('¿Salir del grupo? Tus números dejan de verse. Podés volver a entrar con el código.')) return;
+  const gid = S.profile.group, g = S.group; (S.gUnsub || []).forEach(f => { try { f(); } catch (e) { } }); S.gUnsub = [];
+  try { await Store.leaveGroup(gid, g); } catch (e) { console.error(e); }
+  S.profile.group = null; S.group = null; await Store.saveProfile({ group: null }); render();
+}
+async function groupCheer(x) {
+  const [emoji, ...rest] = x.split(' '); const c = { from: S.user.uid, name: S.profile.name, emoji, text: rest.join(' '), ts: Date.now() };
+  try { await Store.addGroupCheer(S.profile.group, c); toast('Enviado ' + emoji); } catch (e) { toast('No se pudo enviar'); }
+}
+async function shareGroup() {
+  const g = S.group; if (!g) return;
+  const base = S.inviteCode ? inviteLink(S.inviteCode) + '&grupo=' : location.origin + location.pathname + '?grupo=';
+  const text = `¡Sumate al grupo "${g.name}" en Capifit! 🦫 Competimos por quién va mejor (en %, nadie ve tus kilos).\n\n• Si todavía no tenés la app: abrí este link en Safari (en Android, Chrome) y creá tu cuenta: ${base}${g.code}\n  Después Compartir → "Agregar a pantalla de inicio" y entrá desde el ícono.\n• En la app: pestaña Grupo → código ${g.code} → Unirme.`;
+  try { if (navigator.share) { await navigator.share({ title: 'Capifit', text }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(text); toast('Invitación copiada: pegala en WhatsApp 📋', 3000); } catch (e) { prompt('Copiá la invitación:', text); }
+}
+
+// =====================================================================
 //  PERFIL
 // =====================================================================
 function renderMas() {
@@ -2154,7 +2532,8 @@ async function saveProfileForm() {
     const { o, w } = readProfileForm();
     o.formula = $('#pf-formula').value; o.exPct = parseInt($('#pf-ex').value); o.manualKcal = num($('#pf-man').value) || null;
     if (o.manualKcal && (o.manualKcal < 800 || o.manualKcal > 6000)) return toast('La meta manual tiene que estar entre 800 y 6.000 kcal');
-    if (o.goalW && (o.goalW !== S.profile.goalW || !S.profile.goalStartW)) o.goalStartW = w;   // desde acá se mide el camino a la meta
+    if (o.goalW && o.goalW !== S.profile.goalW) o.goalStartW = w;                          // meta nueva: se mide desde hoy
+    else if (o.goalW && !S.profile.goalStartW) o.goalStartW = startWeight();             // perfiles viejos: desde la primera pesada
     if (!o.goalW) o.goalStartW = null;
     if (o.goal === 'bajar' && (S.profile.goal !== 'bajar' || !S.profile.planStart)) o.planStart = S.profile.goal === 'bajar' ? ((S.body.find(b => b.w != null) || {}).date || today()) : today();
     if (o.formula === 'katch' && !lastBody('fat')) { toast('Katch-McArdle necesita un % de grasa cargado. Uso Mifflin.'); o.formula = 'mifflin'; }
@@ -2244,6 +2623,18 @@ const TOURS = {
     ['[data-t=body-stats]', 'Cuánto cambiaste', 'Cada dato con su cambio en los últimos 30 días. Verde es que va en la dirección correcta.'],
     ['[data-t=body-photos]', 'Fotos de progreso', 'Son privadas, nunca se comparten. Tocá dos fotos para verlas lado a lado.'],
     ['[data-t=body-hist]', 'Historial', 'Tocá cualquier medición para corregirla o borrarla.']
+  ],
+  grupo0: [
+    ['[data-t=grp-join]', 'Unirte a un grupo', 'Si alguien de tus amigos ya armó el grupo, pedile el código de 6 letras y ponelo acá.'],
+    ['[data-t=grp-new]', 'O armar uno', 'Si sos el primero, ponele nombre y creá el grupo. Después compartís la invitación por WhatsApp.']
+  ],
+  grupo: [
+    ['[data-t=grp-ronda]', '🦫 Los capis en ronda', 'Son ustedes: cada capi adelgaza con su dueño. Cada tanto se tiran un chiste; tocá uno para que hable, y si te gusta, mandalo al muro.'],
+    ['[data-t=grp-podium]', '🏆 El podio', 'Los tres capis que mejor vienen. Cada capi adelgaza a medida que su dueño se acerca a la meta.'],
+    ['#grp-modes', 'Tres formas de competir', '🎯 Meta: % del camino a su peso objetivo. ⚖️ % bajado: cuánto bajó cada uno desde que entró, en % de su peso (lo más justo). 🔥 Semana: puntos por días en meta, días cargados y actividad.'],
+    ['[data-t=grp-cheers]', 'El muro', 'Mandá un aliento a todo el grupo con un toque. Les aparece al instante.'],
+    ['[data-t=grp-invite]', 'Sumar gente', 'Compartí la invitación: sirve para los que ya tienen la app y para los que no.'],
+    ['[data-t=grp-priv]', 'Tu privacidad', 'El grupo ve porcentajes, no kilos. Si querés mostrar tus kg, lo activás acá.']
   ],
   pareja0: [
     ['[data-t=pair-gen]', 'Paso 1', 'Uno de los dos toca "Generar código" y se lo manda al otro por WhatsApp.'],
