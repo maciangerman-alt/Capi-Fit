@@ -410,6 +410,7 @@ const Local = {
   async createGroup(name) { const gid = 'g' + rid(), code = genCode(); this._g()[gid] = { name, owner: this.uid, members: [this.uid], code, created: Date.now(), stats: {}, cheers: [] }; this.d.gcodes[code] = { gid, name, owner: this.uid }; this.persist(); return { gid, code }; },
   async findGroup(code) { this._g(); return this.d.gcodes[code] || null; },
   async joinGroup(gid) { const g = this._g()[gid]; if (!g) throw new Error('Ese grupo ya no existe'); if (!g.members.includes(this.uid)) g.members.push(this.uid); this.persist(); this._emit('group'); },
+  async amInGroup(gid) { return !!this._g()[gid]?.members.includes(this.uid); },
   async leaveGroup(gid) { const g = this._g()[gid]; if (g) { delete this.d.groups[gid]; delete this.d.gcodes[g.code]; } this.persist(); },
   listenGroup(gid, cb) { return this._on('group', () => { const g = this._g()[gid]; cb(g ? { name: g.name, owner: g.owner, members: g.members, code: g.code } : null); }); },
   listenGroupStats(gid, cb) { return this._on('stats', () => cb(Object.values(this._g()[gid]?.stats || {}))); },
@@ -516,6 +517,7 @@ const FB = {
   },
   async findGroup(code) { const s = await this.db.collection('groupCodes').doc(code).get(); return s.exists ? s.data() : null; },
   joinGroup(gid) { return this.grp(gid).update({ members: firebase.firestore.FieldValue.arrayUnion(this.uid) }); },
+  async amInGroup(gid) { try { const s = await this.grp(gid).get(); return s.exists && (s.data().members || []).includes(this.uid); } catch (e) { return false; } },
   async leaveGroup(gid, g) {
     await this.grp(gid).collection('stats').doc(this.uid).delete().catch(() => { });
     const rest = (g?.members || []).filter(u => u !== this.uid);
@@ -778,7 +780,7 @@ async function boot() {
       refreshRecents();
       Store.myInviteCode().then(c => { S.inviteCode = S.profile.inviteCode || c || null; });
       startSocial();
-      if (storedGroupCode() && !S.profile.group) S.tab = 'grupo';
+      const jn = await autoJoinGroup(); if (jn) { S.tab = 'grupo'; startGroup(); setTimeout(() => toast(`¡Te sumaste a ${jn}! 🦫`, 3000), 800); } else if (storedGroupCode() && !S.profile.group) S.tab = 'grupo';
       renderTabs(); await openDate(today());
     });
   } catch (e) { console.error(e); $('#main').innerHTML = `<div class="empty">No pude iniciar: ${esc(e.message || e)}</div>`; }
@@ -853,6 +855,7 @@ async function doAuth(mode) {
         if (!code) return;
         try { await Store.joinWithCode(code, n); try { localStorage.setItem('capifit_inv', code); } catch (x) { } }
         catch (err) { try { await Store.deleteMe(); } catch (x) { } throw new Error('Ese código de invitación no es válido. Revisalo y volvé a intentar.'); }
+        const gc = storedGroupCode(); if (gc) { try { await Store.saveProfile({ pendingGroup: gc }); } catch (x) { } }
       })();
       try { await S._joinP; } finally { S._joinP = null; }
       const f = $('#pf-name'); if (f && !f.value) f.value = n;
@@ -963,7 +966,8 @@ async function finishOnboarding() {
     o.exPct = 100; o.formula = 'mifflin'; o.share = { kcal: true, streak: true, activity: true, progress: true, weight: false, body: false };
     await Store.saveProfile(o); S.profile = { ...(S.profile || {}), ...o };
     const e = { id: rid(), date: today(), w }; await Store.saveBody(e); S.body.push(e);
-    startSocial(); renderTabs(); await openDate(today()); toast('¡Arrancamos! 💪');
+    const joined = await autoJoinGroup(); if (joined) S.tab = 'grupo';
+    startSocial(); renderTabs(); await openDate(today()); toast(joined ? `¡Arrancamos! Ya estás en ${joined} 🦫` : '¡Arrancamos! 💪', 3000);
   } catch (err) { toast(err.message || err); }
 }
 
@@ -2445,11 +2449,25 @@ async function joinGroupUI() {
   const code = ($('#grp-code').value || '').trim().toUpperCase(); if (code.length !== 6) return toast('El código tiene 6 caracteres');
   try {
     const f = await Store.findGroup(code); if (!f) return toast('Ese código no existe. Revisalo.');
-    await Store.joinGroup(f.gid); await enterGroup(f.gid); clearGroupCode(); toast(`¡Te sumaste a ${f.name}! 🦫`, 3000);
+    try { await Store.joinGroup(f.gid); } catch (e) { if (!(await Store.amInGroup(f.gid))) throw e; }
+    await enterGroup(f.gid); clearGroupCode(); toast(`¡Te sumaste a ${f.name}! 🦫`, 3000);
   } catch (e) { console.error(e); toast('No pude sumarte: ' + (e.message || e)); }
 }
+// Si llegaste con un link de grupo (o lo guardamos al crear tu cuenta), te suma solo. Devuelve el nombre del grupo.
+async function autoJoinGroup() {
+  const p = S.profile; if (!p) return null;
+  const code = String(p.pendingGroup || storedGroupCode() || '').trim().toUpperCase(); if (!code) return null;
+  if (p.group) { clearGroupCode(); if (p.pendingGroup) { p.pendingGroup = null; Store.saveProfile({ pendingGroup: null }).catch(() => { }); } return null; }
+  try {
+    const f = await Store.findGroup(code);
+    if (!f) { clearGroupCode(); p.pendingGroup = null; await Store.saveProfile({ pendingGroup: null }); return null; }
+    try { await Store.joinGroup(f.gid); } catch (e) { if (!(await Store.amInGroup(f.gid))) { console.warn('autojoin', e); return null; } }
+    const o = { group: f.gid, groupJoinW: curWeight(), groupJoined: today(), pendingGroup: null };
+    Object.assign(p, o); await Store.saveProfile(o); clearGroupCode(); return f.name || 'el grupo';
+  } catch (e) { console.warn('autojoin', e); return null; }
+}
 async function enterGroup(gid) {
-  const o = { group: gid, groupJoinW: curWeight(), groupJoined: today() };
+  const o = { group: gid, groupJoinW: curWeight(), groupJoined: today(), pendingGroup: null };
   Object.assign(S.profile, o); await Store.saveProfile(o); startGroup(); render();
 }
 async function leaveGroupUI() {
