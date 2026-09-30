@@ -254,6 +254,9 @@ function loadScript(src) { return new Promise((ok, ko) => { if (document.querySe
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
 FOODS.forEach(f => { f._s = norm(f.n + ' ' + (f.a || '')); });
+// Link de invitación: ?inv=CODIGO → se guarda y se limpia de la barra de direcciones
+(() => { try { const q = new URLSearchParams(location.search); const c = q.get('inv'); if (c) { localStorage.setItem('capifit_inv', c.trim().toUpperCase()); q.delete('inv'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); } } catch (e) { } })();
+function storedInvite() { try { return localStorage.getItem('capifit_inv') || ''; } catch (e) { return ''; } }
 const FOOD_BY_ID = Object.fromEntries(FOODS.map(f => [f.id, f]));
 // Alimentos que cambiaron de nombre entre versiones (para que los recientes no muestren nombres viejos)
 const RENAMED = { 'cafe-solo': 'cafe-negro-sin-azucar', 'cafe-con-leche': 'cafe-con-leche-sin-azucar', 'mate-cocido-con-leche': 'mate-cocido-con-leche-sin-azucar' };
@@ -325,6 +328,7 @@ const Local = {
   },
   persist() { try { localStorage.setItem(this.key, JSON.stringify(this.d)); } catch (e) { toast('⚠️ El navegador se quedó sin espacio: borrá fotos de la demo'); throw e; } },
   used() { let n = 0; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); n += k.length + (localStorage.getItem(k) || '').length; } return n; },
+  async joinWithCode() { }, async myInviteCode() { return null; }, async deleteMe() { },
   async signOut() { if (confirm('¿Borrar todos los datos de la demo?')) { Object.keys(localStorage).filter(k => k.startsWith('capifit')).forEach(k => localStorage.removeItem(k)); location.reload(); } },
   async getProfile() { return this.d.profile || null; },
   async saveProfile(o) { fsCheck(fsEnc(clean(o))); const c = clean(o); const prev = this.d.profile || {}; if (c.tours) c.tours = { ...(prev.tours || {}), ...c.tours }; this.d.profile = { ...prev, ...c }; this.persist(); },
@@ -375,6 +379,10 @@ const FB = {
   async signUp(e, p, name) { const c = await this.auth.createUserWithEmailAndPassword(e, p); await c.user.updateProfile({ displayName: name }); },
   signOut() { return this.auth.signOut(); },
   resetPass(e) { return this.auth.sendPasswordResetEmail(e); },
+  // Invitación: el código lo valida Firebase (está en las reglas, que nadie ve desde afuera)
+  joinWithCode(code, name) { const u = this.auth.currentUser; return this.db.collection('members').doc(u.uid).set({ code, email: u.email || '', name: name || u.displayName || '', ts: Date.now() }); },
+  async myInviteCode() { try { const s = await this.db.collection('members').doc(this.uid).get(); return s.exists ? s.data().code : null; } catch (e) { return null; } },
+  deleteMe() { return this.auth.currentUser?.delete(); },
   u() { return this.db.collection('users').doc(this.uid); },
   async getProfile() { const s = await this.u().get(); return s.exists ? fsDec(s.data()) : null; },
   saveProfile(o) { return this.u().set(fsEnc(clean(o)), { merge: true }); },
@@ -562,6 +570,7 @@ async function boot() {
       Object.assign(S, { coach: null, user: u, profile: null, days: {}, body: [], myFoods: [], photos: null, pShared: null, couple: {}, cheers: [], photoSel: [] });
       if (!u) return renderAuth();
       $('#main').innerHTML = '<div class="empty" style="padding-top:40vh">Cargando tus datos… 🦫</div>';
+      if (S._joinP) { try { await S._joinP; } catch (e) { } if (Store.auth && Store.auth.currentUser?.uid !== u.uid) return; }
       try {
         S.profile = await Store.getProfile();
         const [body, foods] = await Promise.all([Store.listBody(), Store.listMyFoods()]);
@@ -569,14 +578,12 @@ async function boot() {
         await loadDays();
       } catch (e) {
         console.error(e);
-        if (String(e.code || e.message).includes('permission')) {
-          $('#main').innerHTML = `<div class="hero"><div class="logo">🔒</div><h2 class="center">Este mail no está habilitado</h2><p class="center muted">Capifit es privada. Pedile a quien la instaló que agregue <b>${esc(u.email)}</b> a la lista de mails permitidos.</p><button class="btn block mt" onclick="Store.signOut()">Salir</button></div>`;
-          return;
-        }
+        if (String(e.code || e.message).includes('permission')) return renderNeedInvite(u);
         toast('No pude cargar tus datos: ' + (e.message || e));
       }
       if (!S.profile || !S.profile.height) return renderOnboarding();
       refreshRecents();
+      Store.myInviteCode().then(c => { S.inviteCode = S.profile.inviteCode || c || null; });
       startSocial();
       renderTabs(); await openDate(today());
     });
@@ -629,11 +636,13 @@ function renderAuth(mode = 'in') {
   $('#tabs').style.display = 'none'; $('#coach-fab')?.remove();
   $('#main').innerHTML = `<div class="hero">
     <div class="capi" style="width:150px;margin:0 auto" onclick="capiTap(this)">${capiSVG(0.75, 'happy', { tang: true })}</div><h1 class="center">Capifit</h1>
-    <p class="center muted" style="margin:6px 0 22px">Calorías, actividad y progreso. Para dos.</p>
+    <p class="center muted" style="margin:6px 0 22px">Calorías, actividad y progreso. Con tu gente.</p>
+    ${storedInvite() && mode === 'in' ? `<div class="nudge center">¡Te invitaron! 🎉 Tocá <b>Crear cuenta</b> para sumarte.</div>` : ''}
     <div class="seg mb"><button class="${mode === 'in' ? 'on' : ''}" onclick="renderAuth('in')">Entrar</button><button class="${mode === 'up' ? 'on' : ''}" onclick="renderAuth('up')">Crear cuenta</button></div>
-    ${mode === 'up' ? '<label>Tu nombre</label><input id="au-name" autocomplete="given-name" placeholder="Germán"><div class="mt"></div>' : ''}
+    ${mode === 'up' ? `<label>Tu nombre</label><input id="au-name" autocomplete="given-name" placeholder="Tu nombre"><div class="mt"></div>` : ''}
     <label>Mail</label><input id="au-mail" type="email" autocomplete="email" inputmode="email">
     <div class="mt"></div><label>Contraseña</label><input id="au-pass" type="password" autocomplete="${mode === 'up' ? 'new-password' : 'current-password'}">
+    ${mode === 'up' && !DEMO ? `<div class="mt"></div><label>Código de invitación</label><input id="au-inv" autocapitalize="characters" autocomplete="off" value="${esc(storedInvite())}" placeholder="Te lo pasa quien te invitó">` : ''}
     <button class="btn primary block mt2" id="au-go" onclick="doAuth('${mode}')">${mode === 'up' ? 'Crear cuenta' : 'Entrar'}</button>
     ${mode === 'in' ? '<button class="btn ghost block mt" onclick="doReset()">Me olvidé la contraseña</button>' : ''}
   </div>`;
@@ -641,9 +650,35 @@ function renderAuth(mode = 'in') {
 async function doAuth(mode) {
   const e = $('#au-mail').value.trim(), p = $('#au-pass').value; const b = $('#au-go'); b.disabled = true;
   try {
-    if (mode === 'up') { const n = $('#au-name').value.trim(); if (!n) throw new Error('Poné tu nombre'); S.pendingName = n; await Store.signUp(e, p, n); const f = $('#pf-name'); if (f && !f.value) f.value = n; }
+    if (mode === 'up') {
+      const n = $('#au-name').value.trim(); if (!n) throw new Error('Poné tu nombre');
+      const code = ($('#au-inv')?.value || '').trim().toUpperCase();
+      S.pendingName = n;
+      S._joinP = (async () => {
+        await Store.signUp(e, p, n);
+        if (!code) return;
+        try { await Store.joinWithCode(code, n); try { localStorage.setItem('capifit_inv', code); } catch (x) { } }
+        catch (err) { try { await Store.deleteMe(); } catch (x) { } throw new Error('Ese código de invitación no es válido. Revisalo y volvé a intentar.'); }
+      })();
+      try { await S._joinP; } finally { S._joinP = null; }
+      const f = $('#pf-name'); if (f && !f.value) f.value = n;
+    }
     else await Store.signIn(e, p);
   } catch (err) { b.disabled = false; toast(authErr(err)); }
+}
+function renderNeedInvite(u) {
+  $('#tabs').style.display = 'none'; $('#coach-fab')?.remove();
+  $('#main').innerHTML = `<div class="hero"><div class="capi" style="width:130px;margin:0 auto">${capiSVG(0.7, 'hungry')}</div>
+    <h2 class="center">Te falta la invitación</h2><p class="center muted">Capifit es por invitación. Escribí el código que te pasaron${u?.email ? ` para <b>${esc(u.email)}</b>` : ''}.</p>
+    <input id="inv-code" class="mt" autocapitalize="characters" autocomplete="off" value="${esc(storedInvite())}" placeholder="CAPI-XXXXX">
+    <button class="btn primary block mt" id="inv-go" onclick="useInvite()">Entrar</button>
+    <button class="btn ghost block mt" onclick="Store.signOut()">Salir</button></div>`;
+}
+async function useInvite() {
+  const code = $('#inv-code').value.trim().toUpperCase(); if (!code) return toast('Escribí el código');
+  const b = $('#inv-go'); b.disabled = true;
+  try { await Store.joinWithCode(code); try { localStorage.setItem('capifit_inv', code); } catch (x) { } location.reload(); }
+  catch (e) { b.disabled = false; toast('Ese código no es válido. Revisalo 🧐', 3500); }
 }
 function authErr(e) {
   const c = e.code || ''; if (c.includes('invalid-email')) return 'Ese mail no es válido'; if (c.includes('weak-password')) return 'La contraseña necesita 6 caracteres o más';
@@ -1917,6 +1952,7 @@ function renderMas() {
     <div class="mt"><label>Meta manual de kcal (dejalo vacío para usar la calculada)</label><input id="pf-man" inputmode="numeric" value="${p.manualKcal || ''}"></div>
     <button class="btn primary block mt" onclick="saveProfileForm()">Guardar</button></div>
   ${DEMO ? '' : `<div class="card" data-t="mas-priv"><h3>🔒 Qué ve tu pareja de vos</h3>${privacyToggles()}</div>`}
+  ${DEMO ? '' : inviteCard()}
   <div class="card" data-t="mas-export"><h3>📤 Exportar</h3><p class="muted" style="margin-top:4px">Excel con comidas, actividad y mediciones de los últimos 90 días.</p><button class="btn block" onclick="exportXls()">Descargar Excel</button></div>
   <div class="card"><h3>📚 La base de calorías</h3><p class="muted" style="margin-top:4px;font-size:.9rem">${FOODS.length} alimentos, ${FOODS.filter(f => f.r).length} de ellos platos caseros calculados ingrediente por ingrediente (con el aceite que absorbe lo frito y el agua que pierde la carne). Referencias: USDA FoodData Central, tablas argentinas ARGENFOODS/SARA y etiquetas. Los envasados salen de Open Food Facts por código de barras. En cada alimento, tocá "¿De dónde sale este número?".</p></div>
   <button class="btn block mb" data-t="mas-tour" onclick="resetTours()">💡 Ver de nuevo las explicaciones</button>
@@ -1934,6 +1970,26 @@ function goalCard() {
     <table><tr><td>En 4 semanas</td><td>≈ ${fmt1(pr.first4)} kg</td></tr><tr><td>En 12 semanas</td><td>≈ ${fmt1(pr.first12)} kg</td></tr>
     <tr><td>Llegás aprox.</td><td>${fmtDate(pr.date)} ${parseYmd(pr.date).getFullYear()} (${pr.weeks} semanas)</td></tr></table>
     <div class="mt">Las primeras 1-2 semanas la balanza baja más rápido (1-3 kg de agua y comida que ya no está en el cuerpo). Después se estabiliza: es normal, no es que te estancaste.</div></div>`;
+}
+function inviteLink(code) { return location.origin + location.pathname + '?inv=' + encodeURIComponent(code); }
+function inviteCard() {
+  const code = S.inviteCode;
+  return `<div class="card" data-t="mas-invite"><h3>👥 Invitar amigos</h3>
+    ${code ? `<p class="muted" style="margin:6px 0 10px">Mandales la invitación por WhatsApp: abren el link, crean su cuenta y listo. Cada uno ve solo lo suyo.</p>
+      <button class="btn primary block" onclick="shareInvite()">Compartir invitación</button>
+      <small class="muted" style="display:block;margin-top:8px">Código: <b>${esc(code)}</b></small>`
+    : `<p class="muted" style="margin:6px 0 10px">Escribí una sola vez el código de invitación que está en tus reglas de Firebase:</p>
+      <div class="row"><input id="inv-set" autocapitalize="characters" placeholder="CAPI-XXXXX"><button class="btn primary" onclick="setInviteCode()">Guardar</button></div>`}</div>`;
+}
+async function setInviteCode() {
+  const c = ($('#inv-set').value || '').trim().toUpperCase(); if (!c) return;
+  S.inviteCode = c; S.profile.inviteCode = c; render(); await Store.saveProfile({ inviteCode: c }); toast('Listo, ya podés invitar 👥');
+}
+async function shareInvite() {
+  const code = S.inviteCode, link = inviteLink(code);
+  const text = `¡Sumate a Capifit! 🦫 La app para contar calorías, actividad y progreso.\n\n1. Abrí este link en Safari (en Android, en Chrome): ${link}\n2. Tocá "Crear cuenta". El código de invitación ya viene puesto (si no, es ${code}).\n3. Después: Compartir → "Agregar a pantalla de inicio", abrila desde el ícono y entrá con tu mail y contraseña.`;
+  try { if (navigator.share) { await navigator.share({ title: 'Capifit', text }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(text); toast('Invitación copiada: pegala en WhatsApp 📋', 3000); } catch (e) { prompt('Copiá la invitación:', text); }
 }
 async function saveProfileForm() {
   try {
@@ -2040,6 +2096,7 @@ const TOURS = {
     ['[data-t=mas-meta]', 'Tu meta', 'Cuántas calorías te tocan por día y cómo se calculan.'],
     ['[data-t=goal-card]', 'Tu camino', 'Si cargaste un peso objetivo, acá ves cuánto te falta y en qué fecha llegás aproximadamente, al ritmo que elegiste.'],
     ['[data-t=mas-datos]', 'Tus datos', 'Si cambia tu objetivo o tu nivel de actividad, actualizalo acá y la meta se recalcula sola.'],
+    ['[data-t=mas-invite]', 'Invitar amigos', 'Compartí la invitación por WhatsApp: tus amigos abren el link, crean su cuenta y listo. Cada uno ve solo lo suyo.'],
     ['[data-t=mas-priv]', 'Privacidad', 'Elegí qué puede ver tu pareja de vos. Lo podés cambiar cuando quieras.'],
     ['[data-t=mas-export]', 'Exportar', 'Te bajás un Excel con todo lo que cargaste.'],
     ['[data-t=mas-tour]', 'Volver a ver esto', 'Si alguna vez querés repasar las explicaciones, tocá acá.']
