@@ -40,7 +40,7 @@ label{font-size:.82rem;color:var(--muted);font-weight:700;display:block;margin:0
 h1,h2,h3{margin:0;font-weight:900;letter-spacing:-.01em}
 h1{font-size:1.55rem} h2{font-size:1.15rem} h3{font-size:1rem}
 small,.muted{color:var(--muted)}
-#main{max-width:560px;margin:0 auto;padding:10px 14px calc(96px + var(--safe-b))}
+#main{max-width:560px;margin:0 auto;padding:10px 14px calc(150px + var(--safe-b))}
 .card{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
 .row{display:flex;align-items:center;gap:10px}
 .between{justify-content:space-between}
@@ -171,6 +171,24 @@ html.touring,html.touring body{overflow:hidden;overscroll-behavior:none}
 .media-box.deco{aspect-ratio:auto;height:170px;box-shadow:var(--shadow)}
 .media-box.deco img{object-position:50% 25%}
 .media-box.deco span{position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,.55);color:#fff;font-weight:800;font-size:.85rem;padding:5px 10px;border-radius:10px}
+#coach-fab{position:fixed;right:14px;bottom:calc(80px + var(--safe-b));z-index:30;display:flex;align-items:center;gap:6px;padding:5px 14px 5px 5px;border-radius:30px;background:var(--brand);color:var(--brand-ink);font-weight:900;font-size:.9rem;box-shadow:0 6px 18px rgba(80,40,10,.3)}
+#coach-fab .fab-capi{width:44px;height:44px;border-radius:50%;background:#F6E3D2;overflow:hidden;display:block}
+#coach-fab .fab-capi svg{width:62px;height:auto;margin:1px 0 0 -9px;display:block}
+#sheet.open ~ #coach-fab,html.touring #celebrate ~ #coach-fab{display:none}
+#coach-msgs{min-height:40vh}
+.cmsg{display:flex;gap:8px;margin:10px 0;align-items:flex-end}
+.cmsg.me{justify-content:flex-end}
+.cmsg .cav{width:36px;flex:none}
+.cmsg .cav svg{width:36px;height:auto;display:block}
+.cb{background:var(--card);padding:10px 12px;border-radius:16px 16px 16px 4px;max-width:82%;box-shadow:var(--shadow);font-size:.95rem;line-height:1.42;overflow-wrap:anywhere}
+.cmsg.me .cb{background:var(--brand);color:var(--brand-ink);border-radius:16px 16px 4px 16px}
+.cb.err{background:var(--bad-soft);color:var(--bad)}
+.coach-in{position:sticky;bottom:calc(-20px - var(--safe-b));background:var(--bg);display:flex;gap:8px;align-items:flex-end;padding:10px 0 calc(12px + var(--safe-b))}
+.coach-in textarea{resize:none;min-height:46px;max-height:120px;line-height:1.35}
+.coach-in .btn{min-width:52px;font-size:1.1rem}
+.typing i{display:inline-block;width:7px;height:7px;margin:0 2px;border-radius:50%;background:var(--muted);animation:tdot 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes tdot{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
 #toast{position:fixed;left:50%;bottom:calc(88px + var(--safe-b));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:14px;font-weight:800;font-size:.9rem;opacity:0;transition:.25s;z-index:80;pointer-events:none;max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 #reader{width:100%;border-radius:14px;overflow:hidden;background:#000;min-height:220px}
@@ -540,7 +558,7 @@ async function boot() {
   try {
     await Store.init(async u => {
       S.unsub.forEach(f => { try { f(); } catch (e) { } }); S.unsub = [];
-      Object.assign(S, { user: u, profile: null, days: {}, body: [], myFoods: [], photos: null, pShared: null, couple: {}, cheers: [], photoSel: [] });
+      Object.assign(S, { coach: null, user: u, profile: null, days: {}, body: [], myFoods: [], photos: null, pShared: null, couple: {}, cheers: [], photoSel: [] });
       if (!u) return renderAuth();
       $('#main').innerHTML = '<div class="empty" style="padding-top:40vh">Cargando tus datos… 🦫</div>';
       try {
@@ -607,7 +625,7 @@ async function dayOp(op) {
 //  PANTALLAS DE ACCESO
 // =====================================================================
 function renderAuth(mode = 'in') {
-  $('#tabs').style.display = 'none';
+  $('#tabs').style.display = 'none'; $('#coach-fab')?.remove();
   $('#main').innerHTML = `<div class="hero">
     <div class="capi" style="width:150px;margin:0 auto" onclick="capiTap(this)">${capiSVG(0.75, 'happy', { tang: true })}</div><h1 class="center">Capifit</h1>
     <p class="center muted" style="margin:6px 0 22px">Calorías, actividad y progreso. Para dos.</p>
@@ -683,7 +701,7 @@ function readProfileForm() {
   return { o, w };
 }
 function renderOnboarding() {
-  $('#tabs').style.display = 'none';
+  $('#tabs').style.display = 'none'; $('#coach-fab')?.remove();
   $('#main').innerHTML = `<div class="card mt"><div class="capi party" style="width:140px;margin:0 auto">${capiSVG(0.8, 'party')}</div><h1 class="center">¡Bienvenido/a a Capifit!</h1>
   <p class="center muted">Con esto calculo tu meta diaria de calorías y macros.</p>${profileForm({ goal: 'mantener' })}
   <button class="btn primary block mt2" onclick="finishOnboarding()">Listo, arrancar</button></div>`;
@@ -703,7 +721,7 @@ async function finishOnboarding() {
 // =====================================================================
 const TABS = [['hoy', 'Hoy', '🍽️'], ['act', 'Actividad', '🏃'], ['body', 'Progreso', '📈'], ['pareja', 'Pareja', '💞'], ['mas', 'Perfil', '⚙️']];
 function renderTabs() {
-  const n = $('#tabs'); n.style.display = 'flex';
+  const n = $('#tabs'); n.style.display = 'flex'; coachFab();
   n.innerHTML = TABS.map(([k, t, i]) => `<button class="${S.tab === k ? 'on' : ''}" onclick="go('${k}')"><span class="ic">${i}</span>${t}</button>`).join('');
 }
 function go(tab) { S.tab = tab; renderTabs(); render(); window.scrollTo(0, 0); }
@@ -772,7 +790,7 @@ function renderHoy() {
     <div class="row between mt"><div class="glasses">${Array.from({ length: glasses }, (_, i) => `<div class="glass ${i < wOn ? 'on' : ''}"></div>`).join('')}</div>
     <div class="row"><button class="btn sm" onclick="addWater(-250)">−</button><button class="btn sm primary" onclick="addWater(250)">+ vaso</button></div></div></div>
   <div class="row mt mb"><button class="btn block" data-t="copy" onclick="copyYesterday()">📋 Copiar comidas del día anterior</button></div>`;
-  maybeTour(toursSeen().hoy ? 'capi' : 'hoy');
+  { const ts = toursSeen(); maybeTour(!ts.hoy ? 'hoy' : !ts.capi ? 'capi' : 'coach'); }
 }
 async function addWater(ml) { if (ml < 0 && (S.day.water || 0) < 250) return; await dayOp({ water: ml }); }
 async function copyYesterday() {
@@ -1438,6 +1456,164 @@ function checkGoalCelebrations() {
 }
 
 // =====================================================================
+//  CAPI COACH · chat con IA (Gemini vía Firebase AI Logic) que conoce tus datos
+// =====================================================================
+const AI_SDK = '12.19.0';
+// Modelos a probar en orden (si uno no existe en tu proyecto, se usa el siguiente). Se puede cambiar en config.js.
+function coachModels() {
+  const saved = (() => { try { return localStorage.getItem('capifit_ai_model'); } catch (e) { return null; } })();
+  const list = window.CAPIFIT_AI_MODELS || ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+  return saved ? [saved, ...list.filter(m => m !== saved)] : list;
+}
+const COACH_LIMIT = 60; // mensajes por persona por día (cuida el cupo gratis)
+const COACH_SUGGEST = ['¿Qué ceno con lo que me queda hoy?', '¿Cómo vengo esta semana?', '¿Cuándo llego a mi meta?', 'Rutina de 30 min en casa', '¿Por qué no bajé esta semana?', 'Ideas de merienda con proteína'];
+
+function coachKey() { return 'capifit_coach_' + (S.user?.uid || 'demo'); }
+function coachLoad() { try { return JSON.parse(localStorage.getItem(coachKey())) || []; } catch (e) { return []; } }
+function coachSave() { try { localStorage.setItem(coachKey(), JSON.stringify(S.coach.msgs.slice(-40))); } catch (e) { } }
+function coachCount(add) {
+  const k = 'capifit_coach_n_' + today(); let n = 0; try { n = +localStorage.getItem(k) || 0; if (add) localStorage.setItem(k, n + 1); } catch (e) { } return n;
+}
+
+async function coachModel(system, model) {
+  if (!S._ai) {
+    const [{ initializeApp }, { getAI, getGenerativeModel, GoogleAIBackend }] = await Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${AI_SDK}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${AI_SDK}/firebase-ai.js`)]);
+    const app = initializeApp(S._coachTestCfg || FIREBASE_CONFIG, 'capifit-ai');
+    S._ai = { ai: getAI(app, { backend: new GoogleAIBackend() }), getGenerativeModel };
+  }
+  return S._ai.getGenerativeModel(S._ai.ai, { model, systemInstruction: system, generationConfig: { temperature: 0.6, maxOutputTokens: 1000 } });
+}
+
+// ---------- Lo que el capi sabe de vos (se arma de nuevo en cada pregunta) ----------
+function coachContext() {
+  const p = S.profile, t = T(), w = curWeight(), start = (S.body.find(b => b.w != null) || {}).w;
+  const goalTxt = { bajar: 'bajar de peso (grasa)', mantener: 'mantener el peso', subir: 'ganar músculo' }[p.goal] || p.goal;
+  const L = [];
+  L.push(`Hoy es ${fmtDate(today())} ${today().slice(0, 4)}, son las ${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, '0')}.`);
+  L.push(`PERFIL: ${p.name}, ${p.sex === 'M' ? 'hombre' : 'mujer'}, ${ageFrom(p.birth)} años, ${p.height} cm, peso actual ${fmt1(w)} kg (IMC ${fmt1(t.bmi)}). Objetivo: ${goalTxt}${p.goal === 'bajar' ? `, ritmo ${String(pacePct(p)).replace('.', ',')} % del peso por semana` : ''}${p.goalW ? `, peso objetivo ${fmt1(p.goalW)} kg` : ''}. Nivel de actividad diaria (sin entrenar): ${(ACT_LEVELS.find(l => l.v == p.act) || {}).t || p.act}.`);
+  L.push(`META DIARIA EN LA APP: ${fmtK(t.kcal)} kcal (+ lo que queme entrenando${(p.exPct ?? 100) < 100 ? `, cuenta el ${p.exPct} %` : ''}). Proteína ${t.p} g, carbohidratos ${t.c} g, grasas ${t.f} g, agua ${fmtK(t.water)} ml. Cálculo: basal ${fmtK(t.bmr)} × actividad = gasto ${fmtK(t.tdee)} kcal; ajuste por objetivo ${fmtK(t.adj)} kcal${t.capped ? ' (con tope de 1.000 kcal de déficit)' : ''}; cambio esperado ${fmt1(t.weekly)} kg/semana.${t.manual ? ' Usa meta manual.' : ''}`);
+  if (p.goal === 'bajar' && p.goalW) { const pr = projection(p.goalW); if (pr && !pr.stuck) L.push(`PROYECCIÓN: llega a ${fmt1(p.goalW)} kg en ~${pr.weeks} semanas (aprox. ${fmtDate(pr.date)} ${pr.date.slice(0, 4)}); en 4 semanas ~${fmt1(pr.first4)} kg, en 12 semanas ~${fmt1(pr.first12)} kg.`); }
+  const bw = S.body.slice(-12).map(b => `${b.date}: ${[b.w != null ? fmt1(b.w) + ' kg' : '', b.fat != null ? fmt1(b.fat) + '% grasa' : '', b.mus != null ? fmt1(b.mus) + ' kg músculo' : '', b.waist != null ? 'cintura ' + fmt1(b.waist) + ' cm' : ''].filter(Boolean).join(', ')}`);
+  L.push(`MEDICIONES (últimas ${bw.length}${start ? `, empezó en ${fmt1(start)} kg` : ''}):\n${bw.join('\n') || 'sin mediciones'}`);
+  const days = [];
+  for (let i = 14; i >= 1; i--) { const d = addDays(today(), -i), v = S.days[d]; if (!v) continue; const tt = dayTotals(v); if (!tt.n && !tt.min) continue; days.push(`${d}: comió ${fmtK(tt.kcal)} kcal de ${fmtK(dayGoal(v) + tt.counted)} (P${r0(tt.p)} C${r0(tt.c)} G${r0(tt.f)})${tt.min ? `, ${tt.min} min de actividad (${fmtK(tt.burn)} kcal)` : ''}${v.water ? `, agua ${v.water} ml` : ''}${tt.n ? '' : ', no cargó comidas'}`); }
+  L.push(`ÚLTIMOS 14 DÍAS:\n${days.join('\n') || 'sin registros'}`);
+  const td = S.days[today()] || normDay(null, today()); const tt = dayTotals(td);
+  const meals = MEALS.map(([k, n]) => { const l = td.foods.filter(e => e.meal === k); return l.length ? `${n}: ${l.map(e => `${e.n} (${entryLabel(e)}, ${fmtK(entryTot(e).kcal)} kcal)`).join('; ')}` : ''; }).filter(Boolean);
+  L.push(`HOY: comió ${fmtK(tt.kcal)} kcal, le quedan ${fmtK(t.kcal + tt.counted - tt.kcal)} kcal. P${r0(tt.p)}/${t.p} C${r0(tt.c)}/${t.c} G${r0(tt.f)}/${t.f} g. Agua ${td.water || 0} ml.\n${meals.join('\n') || 'No cargó comidas todavía.'}${td.acts.length ? '\nActividad: ' + td.acts.map(a => `${a.name} ${a.min} min (${a.kcal} kcal)`).join('; ') : ''}`);
+  const goals = (p.goals || []).map(g => { const [a, b] = periodRange(g.period); const gt = GOAL_TYPES[g.type]; return `${gt.t} ${fmt1(g.target)} ${gt.u} por ${PERIODS[g.period][0].toLowerCase()}: lleva ${fmt1(goalProgress(g, a, b).v)} (período ${a} a ${b})`; });
+  if (goals.length) L.push(`OBJETIVOS:\n${goals.join('\n')}`);
+  L.push(`Racha: ${streakFrom(myLoggedDates())} días seguidos cargando comidas.`);
+  return L.join('\n\n');
+}
+function coachSystem() {
+  return `Sos "Capi", el coach de Capifit: un carpincho simpático que acompaña a ${S.profile.name} con su alimentación, calorías, ejercicio y progreso. Hablás en español rioplatense (de "vos"), cálido, directo y con un poco de humor. Máximo 1 o 2 emojis por respuesta.
+
+CÓMO RESPONDER
+- Corto: de 2 a 6 oraciones o una lista breve, salvo que te pidan más detalle.
+- Usá los datos de abajo cuando sirvan (kcal que le quedan, peso, tendencia, objetivos) y citá los números. No inventes datos que no están; si falta algo, decilo y sugerí cargarlo en la app.
+- Las calorías de las comidas son estimaciones: si das números, decí que son aproximados.
+- Para ideas de comidas, preferí platos argentinos comunes y porciones caseras.
+- Si preguntan cómo usar la app: Capifit tiene las secciones Hoy (anillo de calorías, comidas, agua, copiar el día anterior), Actividad (cargar deportes y minutos, pasos, sueño), Progreso (mediciones con balanza y cinta, gráfico, fotos privadas, objetivos por semana/mes/trimestre/año, transformación del capi), Pareja (código para vincularse, desafío semanal, aplausos, privacidad) y Perfil (meta, datos, Excel). Para cargar comida: "+ Agregar" en cada comida; hay buscador, escáner de código de barras, carga rápida, crear alimento y crear receta.
+- Temas fuera de alimentación, ejercicio, hábitos o la app: respondé muy breve y volvé al tema.
+- No tenés datos de la pareja: no hables de ella/él.
+
+SEGURIDAD (obligatorio)
+- Nunca recomiendes comer menos que la meta de la app, déficits de más de 1.000 kcal por día ni bajar más de ~1 % del peso por semana. Si piden ir más rápido, explicá con sus números por qué no conviene y sugerí hablarlo con un médico.
+- No recomiendes ayunos extremos, laxantes, diuréticos, vomitar, pastillas para adelgazar ni suplementos milagrosos.
+- No diagnostiques ni indiques medicamentos. Ante síntomas (dolor de pecho, mareos, desmayos, falta de aire, dolor fuerte) decí que consulte a un médico o vaya a una guardia. Con mucho peso para bajar o problemas de salud, recomendá un chequeo médico.
+- Si aparecen señales de una relación difícil con la comida (culpa fuerte, compensar comiendo nada o vomitando, miedo a comer, atracones con angustia), respondé con cuidado, sin números de calorías, y sugerí hablar con un profesional de salud.
+- Nunca retes ni avergüences: un mal día es un mal día; proponé el próximo paso.
+
+DATOS DE ${S.profile.name.toUpperCase()} (actualizados ahora):
+${coachContext()}`;
+}
+
+// ---------- Pantalla del chat ----------
+function coachMd(t) {
+  let h = esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|\n)\s*[-•*]\s+/g, '$1• ');
+  return h.replace(/\n/g, '<br>');
+}
+function openCoach() {
+  S.coach = S.coach || { msgs: coachLoad(), busy: false };
+  openSheet('', { full: true }); renderCoach();
+}
+function renderCoach() {
+  const el = $('.sheet'); if (!el) return; const c = S.coach;
+  if (DEMO && !S._coachTestCfg) {
+    el.innerHTML = `<div class="grab"></div><div class="sheet-h"><h2>💬 Preguntale al Capi</h2><button class="x" onclick="closeSheet()">✕</button></div>
+    <div class="card center"><div class="capi" style="width:120px;margin:0 auto">${capiSVG(0.6, 'hungry')}</div><p>El Capi Coach necesita Firebase para funcionar. En la app publicada, con tu Firebase conectado, ya anda.</p></div>`;
+    return;
+  }
+  if (!S.profile.aiConsent) {
+    el.innerHTML = `<div class="grab"></div><div class="sheet-h"><h2>💬 Preguntale al Capi</h2><button class="x" onclick="closeSheet()">✕</button></div>
+    <div class="card"><div class="capi party" style="width:130px;margin:0 auto">${capiSVG(0.7, 'party')}</div>
+    <h3 class="center mt">Tu coach personal</h3>
+    <p>Preguntame lo que quieras sobre comidas, calorías, ejercicios, tus objetivos o tus avances. Te respondo con <b>tus datos</b>: tu meta, lo que comiste, tus pesadas y tus objetivos.</p>
+    <div class="src"><b>Antes de empezar:</b> para contestarte, tus datos de Capifit (perfil, comidas, actividad, pesadas y objetivos) se mandan a <b>Gemini, la IA de Google</b>. Los de tu pareja nunca. En el plan gratis, Google puede usar las conversaciones para mejorar sus productos: no pongas datos que no quieras compartir. Soy una IA: puedo equivocarme y no reemplazo a un médico ni a un nutricionista.</div>
+    <button class="btn primary block mt" onclick="coachConsent()">Entendido, empecemos</button></div>`;
+    return;
+  }
+  const msgs = c.msgs.map((m, i) => m.r === 'user'
+    ? `<div class="cmsg me"><div class="cb">${esc(m.t)}</div></div>`
+    : `<div class="cmsg"><div class="cav">${capiSVG(capiFat(), 'happy')}</div><div class="cb ${m.err ? 'err' : ''}" ${i === c.msgs.length - 1 && c.busy ? 'id="coach-live"' : ''}>${m.t ? coachMd(m.t) : '<span class="typing"><i></i><i></i><i></i></span>'}</div></div>`).join('');
+  const left = COACH_LIMIT - coachCount();
+  el.innerHTML = `<div class="grab"></div><div class="sheet-h"><h2>💬 Preguntale al Capi</h2><div class="row">${c.msgs.length ? '<button class="btn sm" onclick="coachReset()">Nueva charla</button>' : ''}<button class="x" onclick="closeSheet()">✕</button></div></div>
+  <div id="coach-msgs">${msgs || `<div class="cmsg"><div class="cav">${capiSVG(capiFat(), 'happy')}</div><div class="cb">¡Hola ${esc(S.profile.name.split(' ')[0])}! Soy tu capi coach 🦫 Preguntame lo que quieras: qué comer con lo que te queda, cómo venís, ejercicios, tus objetivos…</div></div>`}</div>
+  ${!c.busy && c.msgs.length < 2 ? `<div class="chips mt mb">${COACH_SUGGEST.map(q => `<button class="chip" onclick="coachSend(${esc(JSON.stringify(q))})">${esc(q)}</button>`).join('')}</div>` : ''}
+  <div class="coach-in"><textarea id="coach-q" rows="1" placeholder="Escribile al capi…" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();coachSend()}"></textarea>
+  <button class="btn primary" onclick="coachSend()" ${c.busy ? 'disabled' : ''} aria-label="Enviar">➤</button></div>
+  ${left <= 10 ? `<small class="muted center" style="display:block">Te quedan ${Math.max(0, left)} preguntas por hoy</small>` : ''}`;
+  const box = $('.sheet'); box.scrollTop = box.scrollHeight;
+}
+async function coachConsent() { S.profile.aiConsent = Date.now(); renderCoach(); await Store.saveProfile({ aiConsent: S.profile.aiConsent }); }
+function coachReset() { if (S.coach.busy) return; S.coach.msgs = []; coachSave(); renderCoach(); }
+function coachErr(e) {
+  const m = String((e && (e.message || e.code)) || e);
+  if (/quota|429|RESOURCE_EXHAUSTED|rate/i.test(m)) return 'Uf, el capi se cansó de tanto hablar: llegamos al límite gratis de la IA por ahora. Probá de nuevo en un rato 😴';
+  if (/api-not-enabled|not been used|has not been enabled|SERVICE_DISABLED|disabled|firebasevertexai|firebaseml|API key/i.test(m)) return 'Falta activar la IA en Firebase: en la consola, AI Logic → Comenzar → Gemini Developer API. Después volvé a preguntar.';
+  if (/network|Failed to fetch|fetch|offline|Load failed|import/i.test(m) || !navigator.onLine) return 'No tengo conexión para pensar 📡 Probá cuando tengas señal.';
+  if (/safety|blocked|SAFETY/i.test(m)) return 'Esa no te la puedo contestar. Probá preguntarlo de otra forma.';
+  return 'Algo falló al responder. Probá de nuevo en un ratito.';
+}
+async function coachSend(q) {
+  const c = S.coach; if (c.busy) return;
+  const input = $('#coach-q'); const text = (q || input?.value || '').trim(); if (!text) return;
+  if (coachCount() >= COACH_LIMIT) return toast('Llegaste al máximo de preguntas por hoy. Mañana seguimos 🦫', 3500);
+  const history = c.msgs.filter(m => !m.err && m.t).slice(-16);
+  while (history.length && history[0].r !== 'user') history.shift();
+  c.msgs.push({ r: 'user', t: text }); c.msgs.push({ r: 'model', t: '' }); c.busy = true; renderCoach(); coachCount(true);
+  const live = c.msgs[c.msgs.length - 1]; const system = coachSystem(); let lastErr = null;
+  for (const model of coachModels()) {
+    try {
+      const chat = (await coachModel(system, model)).startChat({ history: history.map(m => ({ role: m.r, parts: [{ text: m.t }] })) });
+      const res = await chat.sendMessageStream(text);
+      for await (const ch of res.stream) {
+        let part = ''; try { part = ch.text(); } catch (e) { }
+        live.t += part; const b = $('#coach-live'); if (b) { b.innerHTML = coachMd(live.t); const box = $('.sheet'); if (box) box.scrollTop = box.scrollHeight; }
+      }
+      if (!live.t.trim()) { try { live.t = (await res.response).text(); } catch (e) { } }
+      if (!live.t.trim()) throw new Error('empty');
+      try { localStorage.setItem('capifit_ai_model', model); } catch (e) { }
+      lastErr = null; break;
+    } catch (e) {
+      console.warn('coach', model, e); lastErr = e; live.t = '';
+      if (!/not found|404|not supported|unsupported|does not exist|is not available|invalid model/i.test(String(e && e.message || e))) break;
+    }
+  }
+  if (lastErr) { live.t = coachErr(lastErr); live.err = true; }
+  c.busy = false; coachSave(); if ($('#coach-msgs')) renderCoach();
+}
+function coachFab() {
+  if ($('#coach-fab')) return;
+  const b = document.createElement('button'); b.id = 'coach-fab'; b.setAttribute('aria-label', 'Preguntale al Capi'); b.setAttribute('data-t', 'coach');
+  b.onclick = openCoach; b.innerHTML = `<span class="fab-capi">${capiSVG(0.5, 'happy')}</span><span class="fab-l">Preguntale</span>`;
+  document.body.appendChild(b);
+}
+
+// =====================================================================
 //  OBJETIVOS (semana, mes, trimestre, año)
 // =====================================================================
 const PERIODS = { week: ['Semana', 'semanal', 1], month: ['Mes', 'mensual', 4.35], quarter: ['Trimestre', 'trimestral', 13], year: ['Año', 'anual', 52] };
@@ -1768,9 +1944,11 @@ async function exportXls() {
 //  EXPLICACIONES (la primera vez que se entra a cada pantalla)
 // =====================================================================
 const TOURS = {
+  coach: [['#coach-fab', '💬 ¡Nuevo: preguntale al Capi!', 'Tu coach con inteligencia artificial: preguntale qué comer con lo que te queda, cómo venís, ejercicios o cuándo llegás a tu meta. Te responde con tus datos.']],
   capi: [['[data-t=capi]', '🦫 ¡Llegó tu capi!', 'Te acompaña todo el día: te avisa si falta cargar algo, festeja cuando entrenás y se va poniendo más flaquito a medida que bajás de peso. En Progreso podés ver su transformación. Tocalo 😉']],
   hoy: [
     ['[data-t=capi]', '🦫 Tu capi', 'Te acompaña todo el día: te avisa si falta cargar algo, festeja cuando entrenás y se va poniendo más flaquito a medida que bajás de peso. Tocalo 😉'],
+    ['#coach-fab', '💬 Preguntale al Capi', 'Tu coach con inteligencia artificial: preguntale qué comer con lo que te queda, cómo venís, ejercicios o cuándo llegás a tu meta. Te responde con tus datos.'],
     ['[data-t=ring]', '🦫 Tu presupuesto del día', 'El número grande es lo que te queda por comer hoy. Si se pone rojo, te pasaste.'],
     ['[data-t=eq]', 'La cuenta', 'Tu meta, más lo que quemaste entrenando, menos lo que comiste, da lo que te queda.'],
     ['[data-t=macros]', 'Proteína, carbos y grasas', 'La barra que más importa es la de proteína: tratá de llenarla todos los días.'],
@@ -1871,7 +2049,7 @@ function showTourStep() {
 }
 function nextTourStep() { const t = S._tour; if (!t) return; if (t.i >= t.steps.length - 1) return endTour(); t.i++; showTourStep(); }
 function prevTourStep() { const t = S._tour; if (!t || !t.i) return; t.i--; showTourStep(); }
-function endTour() { const t = S._tour; $('#tour')?.remove(); S._tour = null; document.documentElement.classList.remove('touring'); if (t) { markTour(t.k); if (t.k === 'hoy') markTour('capi'); } window.scrollTo({ top: 0, behavior: 'instant' }); $('.sheet')?.scrollTo?.(0, 0); }
+function endTour() { const t = S._tour; $('#tour')?.remove(); S._tour = null; document.documentElement.classList.remove('touring'); if (t) { markTour(t.k); if (t.k === 'hoy') { markTour('capi'); markTour('coach'); } if (t.k === 'capi') markTour('coach'); } window.scrollTo({ top: 0, behavior: 'instant' }); $('.sheet')?.scrollTo?.(0, 0); }
 async function resetTours() {
   try { localStorage.removeItem('capifit_tours'); } catch (e) { }
   S.profile.toursReset = Date.now(); await Store.saveProfile({ toursReset: S.profile.toursReset });
