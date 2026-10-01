@@ -64,7 +64,7 @@ small,.muted{color:var(--muted)}
 .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .pill{white-space:nowrap;font-size:.75rem;font-weight:800;padding:3px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand-2)}
-.pill.good{background:var(--good-soft);color:var(--good)} .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.good{background:var(--good-soft);color:var(--good)} .pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.warn{background:var(--brand-soft);color:var(--warn)}
 .list .item{display:flex;align-items:center;gap:10px;padding:11px 2px;border-top:1px solid var(--line)}
 .list .item:first-child{border-top:0}
 .item .t{font-weight:800;overflow:hidden;text-overflow:ellipsis}
@@ -747,12 +747,16 @@ function dayTotals(d) {
 // Cada día guarda la meta que tenía ese día: si cambia tu peso, el historial no se reescribe.
 function dayGoal(d) { return (d && d.goal) || T().kcal; }
 // ¿Ese día quedó dentro de la meta? Entrenar nunca te saca de la meta, y comer muy por debajo del mínimo no cuenta.
-function inGoal(d) {
-  const t = dayTotals(d); if (!t.n) return false; const g = S.profile?.goal, goal = dayGoal(d), full = goal + t.counted;
-  if (g === 'bajar') { const lo = Math.min(goal * 0.9, Math.max(goal * 0.8, sexFloorOf(S.profile) * 0.9)); return t.kcal >= lo && t.kcal <= full * 1.05; }
-  if (g === 'subir') return t.kcal >= full * 0.95 && t.kcal <= full * 1.15;
-  return t.kcal >= goal * 0.9 && t.kcal <= full * 1.1;
+// El rango "en meta" de un día: ni muy poco (cuesta sostenerlo y se pierde músculo) ni pasado
+function goalRange(d) {
+  const t = dayTotals(d), g = S.profile?.goal, goal = dayGoal(d), full = goal + t.counted;
+  if (g === 'bajar') return { lo: Math.min(goal * 0.9, Math.max(goal * 0.8, sexFloorOf(S.profile) * 0.9)), hi: full * 1.05, goal: full };
+  if (g === 'subir') return { lo: full * 0.95, hi: full * 1.15, goal: full };
+  return { lo: goal * 0.9, hi: full * 1.1, goal: full };
 }
+// 'ok' | 'low' (comió poco) | 'high' (se pasó) | null (no cargó)
+function goalStatus(d) { const t = dayTotals(d); if (!t.n) return null; const r = goalRange(d); return t.kcal < r.lo ? 'low' : t.kcal > r.hi ? 'high' : 'ok'; }
+function inGoal(d) { return goalStatus(d) === 'ok'; }
 function isLogged(d) { return (d?.foods || []).length > 0; }
 function streakFrom(dates) {
   const set = new Set(dates); let d = today(); if (!set.has(d)) d = addDays(d, -1); let n = 0;
@@ -1472,7 +1476,8 @@ function lastDays(n = 10) {
   for (let i = n - 1; i >= 0; i--) {
     const d = addDays(today(), -i), v = S.days[d], tt = dayTotals(v), logged = isLogged(v);
     const spend = t.tdee + tt.burn;
-    out.push({ d, logged, isToday: i === 0, eat: tt.kcal, burn: tt.burn, min: tt.min, spend, bal: spend - tt.kcal, p: tt.p, ok: logged && inGoal(v), goal: v ? dayGoal(v) + tt.counted : t.kcal });
+    const st = logged ? goalStatus(v) : null, rg = v ? goalRange(v) : null;
+    out.push({ d, logged, isToday: i === 0, eat: tt.kcal, burn: tt.burn, min: tt.min, spend, bal: spend - tt.kcal, p: tt.p, st, ok: st === 'ok', rg, goal: v ? dayGoal(v) + tt.counted : t.kcal });
   }
   return out;
 }
@@ -1501,20 +1506,24 @@ function histCard() {
   }).join('');
   const s = days.find(x => x.d === S.histSel);
   const det = !s.logged ? `<div class="muted">${fmtDate(s.d)}: no cargaste comidas, así que no sé cuánto déficit hiciste.</div>`
-    : `<div class="row between"><b>${s.isToday ? 'Hoy (en curso)' : fmtDate(s.d)}</b>${s.isToday ? '<span class="pill">⏳ En curso</span>' : `<span class="pill ${s.ok ? 'good' : 'bad'}">${s.ok ? '✅ En meta' : s.eat > s.goal ? 'Te pasaste' : 'Fuera de meta'}</span>`}</div>
+    : `<div class="row between"><b>${s.isToday ? 'Hoy (en curso)' : fmtDate(s.d)}</b>${s.isToday ? '<span class="pill">⏳ En curso</span>' : s.st === 'ok' ? '<span class="pill good">✅ En meta</span>' : s.st === 'high' ? '<span class="pill bad">🔴 Te pasaste</span>' : '<span class="pill warn">🟡 Comiste poco</span>'}</div>
       <div class="hist-det mt">
         <div><small>Comiste</small><b class="num">${fmtK(s.eat)}</b></div>
         <div><small>Gastaste ≈</small><b class="num">${fmtK(s.spend)}</b>${s.burn ? `<small>incl. ${fmtK(s.burn)} de ejercicio</small>` : ''}</div>
         <div><small>${s.bal >= 0 ? 'Déficit' : 'Superávit'}${s.isToday ? ' hasta ahora' : ''}</small><b class="num" style="color:${s.bal >= 0 ? 'var(--good)' : 'var(--bad)'}">${fmtK(Math.abs(s.bal))}</b></div>
         <div><small>${s.bal >= 0 ? 'Grasa menos' : 'Grasa de más'}</small><b class="num">≈ ${fatTxt(s.bal)}</b></div>
       </div>
+      <div class="mt" style="font-size:.85rem">${s.isToday ? `Tu meta de hoy: <b>${fmtK(s.goal)}</b> kcal. Quedás "en meta" comiendo entre ${fmtK(s.rg.lo)} y ${fmtK(s.rg.hi)}.`
+        : s.st === 'low' ? `Tu meta ese día era <b>${fmtK(s.goal)}</b> kcal y comiste ${fmtK(s.eat)} (${r0(s.eat / s.goal * 100)} %). Para contar como "en meta" hay que comer al menos ${fmtK(s.rg.lo)}: comer tan poco un día no pasa nada, pero seguido cuesta sostenerlo y se pierde músculo.`
+        : s.st === 'high' ? `Tu meta ese día era <b>${fmtK(s.goal)}</b> kcal${s.burn ? ' (con el ejercicio)' : ''} y comiste ${fmtK(s.eat)}: te pasaste ${fmtK(s.eat - s.goal)}.${s.bal > 0 ? ' Igual hiciste déficit, pero menos que el planeado.' : ''}`
+        : `Comiste ${fmtK(s.eat)} de una meta de ${fmtK(s.goal)} kcal${s.burn ? ' (con el ejercicio)' : ''}. ¡Bien ahí! 💪`}</div>
       <button class="btn sm block mt" onclick="openDate('${s.d}').then(()=>go('hoy'))">Ver lo que comí ese día</button>`;
   return `<div class="card" data-t="body-hist10"><div class="row between"><h3>📊 Últimos 10 días</h3><small class="muted">${closed.length} de 9 días cargados</small></div>
     <div class="grid2 mt hist-kpi">
       <div class="stat"><div class="l">Déficit acumulado</div><div class="v num" style="color:${totBal >= 0 ? 'var(--good)' : 'var(--bad)'}">${totBal < 0 ? '+' : ''}${fmtK(Math.abs(totBal))}</div><small>kcal en los días cargados</small></div>
       <div class="stat"><div class="l">En grasa</div><div class="v num">≈ ${fatTxt(totBal)}</div><small>${totBal >= 0 ? 'menos' : 'de más'} (7.700 kcal = 1 kg)</small></div>
       <div class="stat"><div class="l">Comiste por día</div><div class="v num">${closed.length ? fmtK(avgEat) : '–'}</div><small>kcal en promedio</small></div>
-      <div class="stat"><div class="l">Días en meta</div><div class="v num">${okN}<small style="font-size:.9rem"> / ${closed.length}</small></div><small>${burnTot ? `${fmtK(burnTot)} kcal de ejercicio` : 'sin ejercicio cargado'}</small></div>
+      <div class="stat"><div class="l">Días en meta</div><div class="v num">${okN}<small style="font-size:.9rem"> / ${closed.length}</small></div><small>${[closed.filter(x => x.st === 'low').length ? `${closed.filter(x => x.st === 'low').length} comiendo poco` : '', closed.filter(x => x.st === 'high').length ? `${closed.filter(x => x.st === 'high').length} pasados` : '', burnTot ? `${fmtK(burnTot)} kcal de ejercicio` : ''].filter(Boolean).join(' · ') || 'sin ejercicio cargado'}</small></div>
     </div>
     <svg class="hist-svg mt" viewBox="0 0 ${W} ${H}" role="img" aria-label="Calorías comidas y déficit de los últimos 10 días">
       <defs><pattern id="hp-def" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" style="fill:var(--good-soft)"/><rect width="2.5" height="6" style="fill:var(--good)"/></pattern>
